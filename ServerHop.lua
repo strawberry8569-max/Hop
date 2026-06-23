@@ -44,7 +44,6 @@ local function RunScript()
         return false
     end
 
-    -- ИСПРАВЛЕННАЯ ФУНКЦИЯ: Чистый и стабильный автозапуск через GitHub
     local function QueueNextTeleport()
         if queue_on_teleport then
             queue_on_teleport([[
@@ -246,36 +245,35 @@ local function RunScript()
         end
     end)
 
-    local function GetServers()
+    -- ОПТИМИЗИРОВАНО: Запрос только одной страницы (быстро и без лагов)
+    local function GetServers(sortOrder)
         if not Request then return {} end
         local Servers = {}
         pcall(function()
-            local Cursor = ""
-            repeat
-                local URL = "https://games.roblox.com/v1/games/" .. PlaceId .. "/servers/Public?sortOrder=Asc&limit=100"
-                if Cursor ~= "" then
-                    URL = URL .. "&cursor=" .. Cursor
-                end
+            -- Для LowPlayer ищем с конца списка (Desc), для Random — с начала (Asc)
+            local order = sortOrder or "Asc"
+            local URL = "https://games.roblox.com/v1/games/" .. PlaceId .. "/servers/Public?sortOrder=" .. order .. "&limit=100"
+            
+            local Response = Request({ Url = URL, Method = "GET" })
+            local Data = HttpService:JSONDecode(Response.Body)
 
-                local Response = Request({ Url = URL, Method = "GET" })
-                local Data = HttpService:JSONDecode(Response.Body)
-
+            if Data and Data.data then
                 for _, Server in ipairs(Data.data) do
                     table.insert(Servers, Server)
                 end
-                Cursor = Data.nextPageCursor or ""
-            until Cursor == ""
+            end
         end)
         return Servers
     end
 
     local function RandomServerHop()
+        ServerHopButton.Text = "⏳ Searching..."
         pcall(function()
-            local Servers = GetServers()
+            local Servers = GetServers("Asc")
             local ValidServers = {}
 
             for _, Server in ipairs(Servers) do
-                if Server.id ~= JobId and Server.playing < Server.maxPlayers and not IsRecent(Server.id) then
+                if Server.id ~= JobId and Server.playing and Server.maxPlayers and Server.playing < Server.maxPlayers and not IsRecent(Server.id) then
                     table.insert(ValidServers, Server)
                 end
             end
@@ -286,18 +284,29 @@ local function RunScript()
                 AddRecentServer(Selected.id)
                 getgenv().RecentServers = RecentServers
 
-                QueueNextTeleport() -- Передаем команду загрузки скрипта
-
+                QueueNextTeleport()
                 TeleportService:TeleportToPlaceInstance(PlaceId, Selected.id, LocalPlayer)
             else
-                warn("No valid server found")
+                -- Если в первой сотне всё старое, пробуем прыгнуть хоть куда-то кроме текущего
+                for _, Server in ipairs(Servers) do
+                    if Server.id ~= JobId and Server.playing < Server.maxPlayers then
+                        QueueNextTeleport()
+                        TeleportService:TeleportToPlaceInstance(PlaceId, Server.id, LocalPlayer)
+                        return
+                    end
+                end
+                warn("No server found")
+                ServerHopButton.Text = "🔄 Server Hop"
             end
         end)
     end
 
     local function LowPlayerHop()
+        LowPlayerButton.Text = "⏳ Searching..."
         pcall(function()
-            local Servers = GetServers()
+            -- Запрашиваем сервера от меньшего к большему
+            local Servers = GetServers("Asc")
+            -- Сортируем по количеству игроков
             table.sort(Servers, function(a,b) return a.playing < b.playing end)
 
             for _, Server in ipairs(Servers) do
@@ -306,11 +315,18 @@ local function RunScript()
                     AddRecentServer(Server.id)
                     getgenv().RecentServers = RecentServers
 
-                    QueueNextTeleport() -- Передаем команду загрузки скрипта
-
+                    QueueNextTeleport()
                     TeleportService:TeleportToPlaceInstance(PlaceId, Server.id, LocalPlayer)
-                    break
+                    return
                 end
+            end
+            
+            -- Фолбэк если все сервера в списке уже посещались
+            if #Servers > 0 then
+                QueueNextTeleport()
+                TeleportService:TeleportToPlaceInstance(PlaceId, Servers[1].id, LocalPlayer)
+            else
+                LowPlayerButton.Text = "👥 Low Player Hop"
             end
         end)
     end
