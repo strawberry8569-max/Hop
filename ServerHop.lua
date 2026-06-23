@@ -15,7 +15,7 @@ local function RunScript()
     local Request = request or http_request or (syn and syn.request)
 
     if not Request then
-        warn("HTTP request function not found! Скрипту нужен нормальный экзекютор.")
+        warn("HTTP request function not found")
     end
 
     local StartTime = tick()
@@ -166,9 +166,9 @@ local function RunScript()
         return Button
     end
 
-    local ServerHopButton = CreateButton("🔄 Fast Hop", 180)
-    local LowPlayerButton = CreateButton("👥 Low Player Hop", 214)
-    local RejoinButton = CreateButton("↻ Rejoin", 248)
+    local ServerHopButton = CreateButton("🔄 Server Hop",180)
+    local LowPlayerButton = CreateButton("👥 Low Player Hop",214)
+    local RejoinButton = CreateButton("↻ Rejoin",248)
 
     local Dragging = false
     local DragInput
@@ -245,81 +245,76 @@ local function RunScript()
         end
     end)
 
-    -- НОВЫЙ ИСПРАВЛЕННЫЙ И МОМЕНТАЛЬНЫЙ ПОИСК СЕРВЕРА
-    local function SmartFastHop()
-        ServerHopButton.Text = "⚡ Searching..."
-        if not Request then
-            -- Если чит совсем урезанный и нет request, юзаем обычный телепорт
-            QueueNextTeleport()
-            TeleportService:Teleport(PlaceId, LocalPlayer)
-            return
-        end
-
+    -- ВЕРНУЛИ ОРИГИНАЛЬНЫЙ ПОИСК СЕРВЕРОВ ЧЕРЕЗ СТРАНИЦЫ
+    local function GetServers()
+        if not Request then return {} end
+        local Servers = {}
         pcall(function()
-            -- Берем случайную сортировку (Desc или Asc), чтобы списки серверов чередовались моментально
-            local sortType = (math.random(1, 2) == 1) and "Asc" or "Desc"
-            local URL = "https://games.roblox.com/v1/games/" .. PlaceId .. "/servers/Public?sortOrder=" .. sortType .. "&limit=100"
-            
-            local Response = Request({ Url = URL, Method = "GET" })
-            local Data = HttpService:JSONDecode(Response.Body)
-
-            if Data and Data.data and #Data.data > 0 then
-                local ValidServers = {}
-                for _, Server in ipairs(Data.data) do
-                    -- Фильтруем: сервер не текущий, не заполнен, и мы на нем недавно не были
-                    if Server.id ~= JobId and Server.playing and Server.maxPlayers and Server.playing < Server.maxPlayers and not IsRecent(Server.id) then
-                        table.insert(ValidServers, Server)
-                    end
+            local Cursor = ""
+            repeat
+                local URL = "https://games.roblox.com/v1/games/" .. PlaceId .. "/servers/Public?sortOrder=Asc&limit=100"
+                if Cursor ~= "" then
+                    URL = URL .. "&cursor=" .. Cursor
                 end
 
-                if #ValidServers > 0 then
-                    local Selected = ValidServers[math.random(1, #ValidServers)]
-                    HopCount += 1
-                    AddRecentServer(Selected.id)
-                    getgenv().RecentServers = RecentServers
+                local Response = Request({ Url = URL, Method = "GET" })
+                local Data = HttpService:JSONDecode(Response.Body)
 
-                    QueueNextTeleport()
-                    TeleportService:TeleportToPlaceInstance(PlaceId, Selected.id, LocalPlayer)
-                    return
+                for _, Server in ipairs(Data.data) do
+                    table.insert(Servers, Server)
+                end
+                Cursor = Data.nextPageCursor or ""
+            until Cursor == ""
+        end)
+        return Servers
+    end
+
+    local function RandomServerHop()
+        ServerHopButton.Text = "⏳ Searching..."
+        pcall(function()
+            local Servers = GetServers()
+            local ValidServers = {}
+
+            for _, Server in ipairs(Servers) do
+                if Server.id ~= JobId and Server.playing < Server.maxPlayers and not IsRecent(Server.id) then
+                    table.insert(ValidServers, Server)
                 end
             end
-            
-            -- Если ничего не подошло, делаем обычный моментальный прыжок в никуда
-            QueueNextTeleport()
-            TeleportService:Teleport(PlaceId, LocalPlayer)
+
+            if #ValidServers > 0 then
+                local Selected = ValidServers[math.random(1,#ValidServers)]
+                HopCount += 1
+                AddRecentServer(Selected.id)
+                getgenv().RecentServers = RecentServers
+
+                QueueNextTeleport() 
+
+                TeleportService:TeleportToPlaceInstance(PlaceId, Selected.id, LocalPlayer)
+            else
+                warn("No valid server found")
+                ServerHopButton.Text = "🔄 Server Hop"
+            end
         end)
     end
 
     local function LowPlayerHop()
         LowPlayerButton.Text = "⏳ Searching..."
-        if not Request then
-            QueueNextTeleport()
-            TeleportService:Teleport(PlaceId, LocalPlayer)
-            return
-        end
-
         pcall(function()
-            local URL = "https://games.roblox.com/v1/games/" .. PlaceId .. "/servers/Public?sortOrder=Asc&limit=100"
-            local Response = Request({ Url = URL, Method = "GET" })
-            local Data = HttpService:JSONDecode(Response.Body)
+            local Servers = GetServers()
+            table.sort(Servers, function(a,b) return a.playing < b.playing end)
 
-            if Data and Data.data then
-                local Servers = Data.data
-                table.sort(Servers, function(a, b) return (a.playing or 0) < (b.playing or 0) end)
+            for _, Server in ipairs(Servers) do
+                if Server.id ~= JobId and Server.playing < Server.maxPlayers and not IsRecent(Server.id) then
+                    HopCount += 1
+                    AddRecentServer(Server.id)
+                    getgenv().RecentServers = RecentServers
 
-                for _, Server in ipairs(Servers) do
-                    if Server.id ~= JobId and Server.playing and Server.maxPlayers and Server.playing < Server.maxPlayers and not IsRecent(Server.id) then
-                        HopCount += 1
-                        AddRecentServer(Server.id)
-                        getgenv().RecentServers = RecentServers
+                    QueueNextTeleport() 
 
-                        QueueNextTeleport()
-                        TeleportService:TeleportToPlaceInstance(PlaceId, Server.id, LocalPlayer)
-                        return
-                    end
+                    TeleportService:TeleportToPlaceInstance(PlaceId, Server.id, LocalPlayer)
+                    break
                 end
             end
-            SmartFastHop()
         end)
     end
 
@@ -330,7 +325,7 @@ local function RunScript()
         end)
     end
 
-    ServerHopButton.MouseButton1Click:Connect(SmartFastHop)
+    ServerHopButton.MouseButton1Click:Connect(RandomServerHop)
     LowPlayerButton.MouseButton1Click:Connect(LowPlayerHop)
     RejoinButton.MouseButton1Click:Connect(Rejoin)
 
@@ -360,7 +355,7 @@ local function RunScript()
         if gameProcessed then return end
         pcall(function()
             if input.KeyCode == Enum.KeyCode.H then ToggleGui()
-            elseif input.KeyCode == Enum.KeyCode.J then SmartFastHop()
+            elseif input.KeyCode == Enum.KeyCode.J then RandomServerHop()
             elseif input.KeyCode == Enum.KeyCode.K then LowPlayerHop()
             elseif input.KeyCode == Enum.KeyCode.L then Rejoin()
             end
@@ -380,8 +375,8 @@ local function RunScript()
     math.randomseed(os.time())
 
     TeleportService.TeleportInitFailed:Connect(function()
-        task.wait(0.5)
-        SmartFastHop()
+        task.wait(2)
+        pcall(RandomServerHop)
     end)
 
     print("Server Tools Loaded")
