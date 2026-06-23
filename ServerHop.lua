@@ -44,33 +44,12 @@ local function RunScript()
         return false
     end
 
-    -- Функция автозапуска: считывает этот же файл из памяти эксплойта и передает его код дальше
+    -- ИСПРАВЛЕННАЯ ФУНКЦИЯ: Чистый и стабильный автозапуск через GitHub
     local function QueueNextTeleport()
         if queue_on_teleport then
-            local scriptContent = ""
-            
-            -- Проверяем, запущен ли скрипт из файла в папке workspace
-            if isfile and isfile("serverhop.lua") then
-                scriptContent = readfile("serverhop.lua")
-            else
-                -- Если файла на диске нет, используем встроенную копию кода (альтернативный вариант)
-                scriptContent = [[
-                    if not getgenv().RecentServers then getgenv().RecentServers = {} end
-                    -- Здесь мы могли бы продублировать код, но лучше просто сохранить serverhop.lua в папку workspace вашего эксплойта!
-                ]]
-                -- Чтобы всё работало идеально без внешних сайтов, рекомендуется сохранить этот скрипт в текстовый файл "serverhop.lua" внутри папки workspace вашего читора.
-            end
-
             queue_on_teleport([[
                 getgenv().RecentServers = game:GetService("HttpService"):JSONDecode(']].. HttpService:JSONEncode(RecentServers) ..[[')
-                
-                -- Если в папке workspace есть файл, запускаем его, иначе выполняем переданный код
-                if isfile and isfile("serverhop.lua") then
-                    loadstring(readfile("serverhop.lua"))()
-                else
-                    -- Воспроизводим переданный текст скрипта напрямую
-                    loadstring([[ .. string.format("%q", scriptContent) .. ]])()
-                end
+                loadstring(game:HttpGet("https://raw.githubusercontent.com/strawberry8569-max/Hop/main/ServerHop.lua"))()
             ]])
         end
     end
@@ -307,7 +286,7 @@ local function RunScript()
                 AddRecentServer(Selected.id)
                 getgenv().RecentServers = RecentServers
 
-                QueueNextTeleport() -- Подготавливаем перенос кода
+                QueueNextTeleport() -- Передаем команду загрузки скрипта
 
                 TeleportService:TeleportToPlaceInstance(PlaceId, Selected.id, LocalPlayer)
             else
@@ -327,7 +306,7 @@ local function RunScript()
                     AddRecentServer(Server.id)
                     getgenv().RecentServers = RecentServers
 
-                    QueueNextTeleport() -- Подготавливаем перенос кода
+                    QueueNextTeleport() -- Передаем команду загрузки скрипта
 
                     TeleportService:TeleportToPlaceInstance(PlaceId, Server.id, LocalPlayer)
                     break
