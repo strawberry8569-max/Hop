@@ -43,16 +43,6 @@ local function IsRecent(id)
     return false
 end
 
--- ИСПРАВЛЕНО: Функция теперь правильно кодирует JSON строки и заставляет скрипт выполняться заново на следующем сервере
-local function QueueNextTeleport()
-    if queue_on_teleport then
-        queue_on_teleport([[
-            getgenv().RecentServers = game:GetService("HttpService"):JSONDecode(']].. HttpService:JSONEncode(RecentServers) ..[[')
-            loadstring(game:HttpGet("https://raw.githubusercontent.com/strawberry8569-max/Hop/main/ServerHop.lua"))()
-        ]])
-    end
-end
-
 LocalPlayer.Idled:Connect(function()
     pcall(function()
         VirtualUser:CaptureController()
@@ -245,7 +235,6 @@ task.spawn(function()
     end
 end)
 
--- ВЕРНУЛИ ТВОЙ ОРИГИНАЛЬНЫЙ ПОИСК СЕРВЕРОВ ПО СТРАНИЦАМ
 local function GetServers()
     if not Request then return {} end
     local Servers = {}
@@ -270,7 +259,6 @@ local function GetServers()
 end
 
 local function RandomServerHop()
-    ServerHopButton.Text = "⏳ Searching..."
     pcall(function()
         local Servers = GetServers()
         local ValidServers = {}
@@ -287,18 +275,18 @@ local function RandomServerHop()
             AddRecentServer(Selected.id)
             getgenv().RecentServers = RecentServers
 
-            QueueNextTeleport() -- Передаем скрипт дальше
+            if queue_on_teleport then
+                queue_on_teleport([[getgenv().RecentServers = ]].. HttpService:JSONEncode(RecentServers))
+            end
 
             TeleportService:TeleportToPlaceInstance(PlaceId, Selected.id, LocalPlayer)
         else
             warn("No valid server found")
-            ServerHopButton.Text = "🔄 Server Hop"
         end
     end)
 end
 
 local function LowPlayerHop()
-    LowPlayerButton.Text = "⏳ Searching..."
     pcall(function()
         local Servers = GetServers()
         table.sort(Servers, function(a,b) return a.playing < b.playing end)
@@ -309,7 +297,9 @@ local function LowPlayerHop()
                 AddRecentServer(Server.id)
                 getgenv().RecentServers = RecentServers
 
-                QueueNextTeleport() -- Передаем скрипт дальше
+                if queue_on_teleport then
+                    queue_on_teleport([[getgenv().RecentServers = ]].. HttpService:JSONEncode(RecentServers))
+                end
 
                 TeleportService:TeleportToPlaceInstance(PlaceId, Server.id, LocalPlayer)
                 break
@@ -320,7 +310,6 @@ end
 
 local function Rejoin()
     pcall(function()
-        QueueNextTeleport() -- Передаем скрипт дальше даже при режойне
         TeleportService:TeleportToPlaceInstance(PlaceId, JobId, LocalPlayer)
     end)
 end
