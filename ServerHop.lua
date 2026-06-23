@@ -14,10 +14,6 @@ local function RunScript()
 
     local Request = request or http_request or (syn and syn.request)
 
-    if not Request then
-        warn("HTTP request function not found")
-    end
-
     local StartTime = tick()
     local HopCount = 0
     local RecentServers = {}
@@ -166,7 +162,7 @@ local function RunScript()
         return Button
     end
 
-    local ServerHopButton = CreateButton("🔄 Server Hop",180)
+    local ServerHopButton = CreateButton("🔄 Fast Hop",180)
     local LowPlayerButton = CreateButton("👥 Low Player Hop",214)
     local RejoinButton = CreateButton("↻ Rejoin",248)
 
@@ -245,68 +241,42 @@ local function RunScript()
         end
     end)
 
-    -- ОПТИМИЗИРОВАНО: Запрос только одной страницы (быстро и без лагов)
-    local function GetServers(sortOrder)
+    -- МГНОВЕННЫЙ ХОП (Без запросов сайтов, как синяя кнопка)
+    local function FastServerHop()
+        ServerHopButton.Text = "⚡ Teleporting..."
+        HopCount += 1
+        QueueNextTeleport()
+        
+        -- Вызов родного метода Roblox для моментального подбора сервера
+        local success, err = pcall(function()
+            TeleportService:Teleport(PlaceId, LocalPlayer)
+        end)
+        
+        if not success then
+            warn("Fast Hop failed:", err)
+            ServerHopButton.Text = "🔄 Fast Hop"
+        end
+    end
+
+    -- Стандартный LowPlayerHop (оставили на случай, если нужен именно пустой сервер)
+    local function GetServers()
         if not Request then return {} end
         local Servers = {}
         pcall(function()
-            -- Для LowPlayer ищем с конца списка (Desc), для Random — с начала (Asc)
-            local order = sortOrder or "Asc"
-            local URL = "https://games.roblox.com/v1/games/" .. PlaceId .. "/servers/Public?sortOrder=" .. order .. "&limit=100"
-            
+            local URL = "https://games.roblox.com/v1/games/" .. PlaceId .. "/servers/Public?sortOrder=Asc&limit=100"
             local Response = Request({ Url = URL, Method = "GET" })
             local Data = HttpService:JSONDecode(Response.Body)
-
             if Data and Data.data then
-                for _, Server in ipairs(Data.data) do
-                    table.insert(Servers, Server)
-                end
+                for _, Server in ipairs(Data.data) do table.insert(Servers, Server) end
             end
         end)
         return Servers
     end
 
-    local function RandomServerHop()
-        ServerHopButton.Text = "⏳ Searching..."
-        pcall(function()
-            local Servers = GetServers("Asc")
-            local ValidServers = {}
-
-            for _, Server in ipairs(Servers) do
-                if Server.id ~= JobId and Server.playing and Server.maxPlayers and Server.playing < Server.maxPlayers and not IsRecent(Server.id) then
-                    table.insert(ValidServers, Server)
-                end
-            end
-
-            if #ValidServers > 0 then
-                local Selected = ValidServers[math.random(1,#ValidServers)]
-                HopCount += 1
-                AddRecentServer(Selected.id)
-                getgenv().RecentServers = RecentServers
-
-                QueueNextTeleport()
-                TeleportService:TeleportToPlaceInstance(PlaceId, Selected.id, LocalPlayer)
-            else
-                -- Если в первой сотне всё старое, пробуем прыгнуть хоть куда-то кроме текущего
-                for _, Server in ipairs(Servers) do
-                    if Server.id ~= JobId and Server.playing < Server.maxPlayers then
-                        QueueNextTeleport()
-                        TeleportService:TeleportToPlaceInstance(PlaceId, Server.id, LocalPlayer)
-                        return
-                    end
-                end
-                warn("No server found")
-                ServerHopButton.Text = "🔄 Server Hop"
-            end
-        end)
-    end
-
     local function LowPlayerHop()
         LowPlayerButton.Text = "⏳ Searching..."
         pcall(function()
-            -- Запрашиваем сервера от меньшего к большему
-            local Servers = GetServers("Asc")
-            -- Сортируем по количеству игроков
+            local Servers = GetServers()
             table.sort(Servers, function(a,b) return a.playing < b.playing end)
 
             for _, Server in ipairs(Servers) do
@@ -320,14 +290,7 @@ local function RunScript()
                     return
                 end
             end
-            
-            -- Фолбэк если все сервера в списке уже посещались
-            if #Servers > 0 then
-                QueueNextTeleport()
-                TeleportService:TeleportToPlaceInstance(PlaceId, Servers[1].id, LocalPlayer)
-            else
-                LowPlayerButton.Text = "👥 Low Player Hop"
-            end
+            FastServerHop() -- Фолбэк на моментальный хоп, если поиск занял много времени
         end)
     end
 
@@ -338,7 +301,7 @@ local function RunScript()
         end)
     end
 
-    ServerHopButton.MouseButton1Click:Connect(RandomServerHop)
+    ServerHopButton.MouseButton1Click:Connect(FastServerHop)
     LowPlayerButton.MouseButton1Click:Connect(LowPlayerHop)
     RejoinButton.MouseButton1Click:Connect(Rejoin)
 
@@ -368,7 +331,7 @@ local function RunScript()
         if gameProcessed then return end
         pcall(function()
             if input.KeyCode == Enum.KeyCode.H then ToggleGui()
-            elseif input.KeyCode == Enum.KeyCode.J then RandomServerHop()
+            elseif input.KeyCode == Enum.KeyCode.J then FastServerHop()
             elseif input.KeyCode == Enum.KeyCode.K then LowPlayerHop()
             elseif input.KeyCode == Enum.KeyCode.L then Rejoin()
             end
@@ -387,9 +350,10 @@ local function RunScript()
 
     math.randomseed(os.time())
 
+    -- Если телепорт не удался или закинуло на тот же сервер, мгновенно пробуем еще раз
     TeleportService.TeleportInitFailed:Connect(function()
-        task.wait(2)
-        pcall(RandomServerHop)
+        task.wait(0.5)
+        FastServerHop()
     end)
 
     print("Server Tools Loaded")
