@@ -464,7 +464,9 @@ RandomServerHop = function()
         local Servers = GetCachedServers()
         local ValidIndices = {}
         for i, Server in ipairs(Servers) do
-            if Server.id ~= JobId and Server.playing < Server.maxPlayers and not IsRecent(Server.id) then
+            if Server.id ~= JobId
+and Server.playing < (Server.maxPlayers - 2)
+and not IsRecent(Server.id) then
                 table.insert(ValidIndices, i)
             end
         end
