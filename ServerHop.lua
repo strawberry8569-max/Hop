@@ -615,10 +615,10 @@ TeleportService.TeleportInitFailed:Connect(function()
     RandomServerHop()
 end)
 
--- === ЛОГИКА АВТОХОПА (ЖДЕТ 5 СЕК) ===
+-- === ЛОГИКА АВТОХОПА (ЖДЕТ 3 СЕК) ===
 task.spawn(function()
     if not game:IsLoaded() then game.Loaded:Wait() end
-    task.wait(5) -- Ждем 5 секунд после прогрузки
+    task.wait(3) -- Ждем 3 секунд после прогрузки
     
     if Settings.AutoHop and not FoundRarePet then
         AutoHopBtn.Text = "⏳ Hopping..."
