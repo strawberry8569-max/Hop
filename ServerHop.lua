@@ -12,7 +12,7 @@ local function RunScript()
     local PlaceId = game.PlaceId
     local JobId = game.JobId
 
-    -- Универсальный поиск функции HTTP-запросов
+    -- Универсальный запрос
     local Request = (typeof(request) == "function" and request) or 
                     (typeof(http_request) == "function" and http_request) or 
                     (syn and syn.request) or nil
@@ -31,14 +31,46 @@ local function RunScript()
         Bear = true
     }
 
-    -- Логика недавних серверов
+    -- === АВТОМАТИЧЕСКИЙ АНТИ-ЛАГ (Очистка Gardens) ===
+    task.spawn(function()
+        local function SetupAntiLag()
+            local gardens = workspace:WaitForChild("Gardens", 10)
+            if not gardens then return end
+
+            local function CleanPlot(plot)
+                -- Удаляем всё, что уже успело загрузиться внутри Plot
+                for _, item in ipairs(plot:GetChildren()) do
+                    pcall(function() item:Destroy() end)
+                end
+                
+                -- Уничтожаем всё новое, что игра попытается туда загрузить
+                plot.ChildAdded:Connect(function(item)
+                    pcall(function() item:Destroy() end)
+                end)
+            end
+
+            -- Обрабатываем текущие плоты
+            for _, plot in ipairs(gardens:GetChildren()) do
+                CleanPlot(plot)
+            end
+
+            -- Если игра динамически создает новые папки Plot
+            gardens.ChildAdded:Connect(function(plot)
+                task.wait()
+                CleanPlot(plot)
+            end)
+        end
+
+        pcall(SetupAntiLag)
+    end)
+
+    -- === ЛОГИКА СЕРВЕРОВ ===
     local function AddRecentServer(id)
         table.insert(RecentServers, 1, id)
         while #RecentServers > 20 do table.remove(RecentServers) end
     end
 
     AddRecentServer(JobId)
-
     if getgenv().RecentServers then RecentServers = getgenv().RecentServers end
 
     local function IsRecent(id)
@@ -53,8 +85,6 @@ local function RunScript()
             local data = HttpService:JSONEncode(RecentServers)
             queue_on_teleport([[
                 getgenv().RecentServers = game:GetService("HttpService"):JSONDecode(']].. data ..[[')
-                -- Раскомментируй строку ниже, если у тебя есть лоадстринг авто-запуска:
-                -- loadstring(game:HttpGet("https://raw.githubusercontent.com/strawberry8569-max/Hop/main/ServerHop.lua"))()
             ]])
         end
     end
@@ -71,11 +101,9 @@ local function RunScript()
     local Gui = Instance.new("ScreenGui")
     Gui.Name = "ServerToolsGui"
     Gui.ResetOnSpawn = false
-    -- Если старый GUI существует, удаляем его
     if game.CoreGui:FindFirstChild(Gui.Name) then game.CoreGui[Gui.Name]:Destroy() end
     Gui.Parent = game.CoreGui
 
-    -- ОСНОВНОЕ ОКНО
     local Main = Instance.new("Frame")
     Main.Parent = Gui
     Main.Size = UDim2.new(0, 200, 0, 480)
@@ -83,10 +111,7 @@ local function RunScript()
     Main.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
     Main.BorderSizePixel = 0
     Main.ClipsDescendants = true
-
-    local MainCorner = Instance.new("UICorner")
-    MainCorner.CornerRadius = UDim.new(0, 10)
-    MainCorner.Parent = Main
+    Instance.new("UICorner", Main).CornerRadius = UDim.new(0, 10)
 
     -- ШАПКА
     local TopBar = Instance.new("Frame")
@@ -116,7 +141,7 @@ local function RunScript()
     Minimize.BackgroundColor3 = Color3.fromRGB(55, 55, 60)
     Instance.new("UICorner", Minimize).CornerRadius = UDim.new(0, 6)
 
-    -- КОНТЕЙНЕР (Для удобного скрытия при сворачивании)
+    -- КОНТЕЙНЕР ДЛЯ СКРЫТИЯ
     local Content = Instance.new("Frame")
     Content.Parent = Main
     Content.Size = UDim2.new(1, 0, 1, -30)
@@ -184,7 +209,6 @@ local function RunScript()
     PetScrollFrame.BackgroundTransparency = 1
     PetScrollFrame.ScrollBarThickness = 3
     PetScrollFrame.BorderSizePixel = 0
-
     local PetListLayout = Instance.new("UIListLayout")
     PetListLayout.Parent = PetScrollFrame
     PetListLayout.Padding = UDim.new(0, 4)
@@ -215,12 +239,11 @@ local function RunScript()
     ServerScroll.BackgroundTransparency = 1
     ServerScroll.ScrollBarThickness = 3
     ServerScroll.BorderSizePixel = 0
-
     local ServerListLayout = Instance.new("UIListLayout")
     ServerListLayout.Parent = ServerScroll
     ServerListLayout.Padding = UDim.new(0, 4)
 
-    -- === ЛОГИКА DRAG (Перетаскивание) ===
+    -- DRAG (Перетаскивание)
     local Dragging, DragInput, DragStart, StartPos
     TopBar.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 then
@@ -240,7 +263,7 @@ local function RunScript()
         end
     end)
 
-    -- === СТАТИСТИКА ===
+    -- ОБНОВЛЕНИЕ СТАТИСТИКИ
     local Frames, LastUpdate = 0, tick()
     RunService.RenderStepped:Connect(function()
         Frames += 1
@@ -268,7 +291,7 @@ local function RunScript()
         end
     end)
 
-    -- === ЛОГИКА ПЕТОВ ===
+    -- РАДАР ПЕТОВ
     local function PopulatePetList()
         for _, child in ipairs(PetScrollFrame:GetChildren()) do
             if child:IsA("Frame") then child:Destroy() end
@@ -361,7 +384,7 @@ local function RunScript()
     end)
     PopulatePetList()
 
-    -- === ЛОГИКА СЕРВЕРОВ И КЭША ===
+    -- СИСТЕМА КЭШИРОВАНИЯ СЕРВЕРОВ
     local function FetchAllServers()
         local Servers = {}
         if Request then
@@ -377,7 +400,6 @@ local function RunScript()
                 until Cursor == ""
             end)
         else
-            -- Запасной вариант если Request не поддерживается
             pcall(function()
                 local res = game:HttpGet("https://games.roblox.com/v1/games/" .. PlaceId .. "/servers/Public?sortOrder=Asc&limit=100")
                 local Data = HttpService:JSONDecode(res)
@@ -442,7 +464,6 @@ local function RunScript()
         ServerScroll.CanvasSize = UDim2.new(0, 0, 0, ServerListLayout.AbsoluteContentSize.Y + 10)
     end
 
-    -- === ДЕЙСТВИЯ КНОПОК ===
     ListButton.MouseButton1Click:Connect(function()
         ListFrame.Visible = not ListFrame.Visible
         if ListFrame.Visible then task.spawn(PopulateServerList) end
@@ -514,7 +535,7 @@ local function RunScript()
     LowPlayerButton.MouseButton1Click:Connect(LowPlayerHop)
     RejoinButton.MouseButton1Click:Connect(Rejoin)
 
-    -- === СВОРАЧИВАНИЕ GUI ===
+    -- СВОРАЧИВАНИЕ GUI
     local Minimized = false
     Minimize.MouseButton1Click:Connect(function()
         Minimized = not Minimized
@@ -524,7 +545,7 @@ local function RunScript()
         TweenService:Create(Main, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Size = TargetSize }):Play()
     end)
     
-    print("Server Tools Loaded Successfully!")
+    print("Server Tools & Anti-Lag Loaded Successfully!")
 end
 
 RunScript()
