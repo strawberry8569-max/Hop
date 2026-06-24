@@ -6,6 +6,7 @@ local function RunScript()
     local TweenService = game:GetService("TweenService")
     local RunService = game:GetService("RunService")
     local VirtualUser = game:GetService("VirtualUser")
+    local Stats = game:GetService("Stats")
 
     local LocalPlayer = Players.LocalPlayer
     local Camera = workspace.CurrentCamera
@@ -23,8 +24,8 @@ local function RunScript()
     local SettingsFile = SettingsFolder .. "/Config.json"
 
     local Settings = { AutoHop = false }
-    local FoundRarePet = false -- Глобальный флаг для автохопа
-    local RandomServerHop -- Объявляем заранее
+    local FoundRarePet = false 
+    local RandomServerHop 
 
     -- === СОХРАНЕНИЕ И ЗАГРУЗКА НАСТРОЕК ===
     local function SaveSettings()
@@ -38,9 +39,7 @@ local function RunScript()
 
     local function LoadSettings()
         if isfile and isfile(SettingsFile) then
-            local success, result = pcall(function()
-                return HttpService:JSONDecode(readfile(SettingsFile))
-            end)
+            local success, result = pcall(function() return HttpService:JSONDecode(readfile(SettingsFile)) end)
             if success and type(result) == "table" then
                 if result.AutoHop ~= nil then Settings.AutoHop = result.AutoHop end
             end
@@ -96,10 +95,7 @@ local function RunScript()
 
     -- Анти-АФК
     LocalPlayer.Idled:Connect(function()
-        pcall(function()
-            VirtualUser:CaptureController()
-            VirtualUser:ClickButton2(Vector2.new())
-        end)
+        pcall(function() VirtualUser:CaptureController(); VirtualUser:ClickButton2(Vector2.new()) end)
     end)
 
     -- === СОЗДАНИЕ GUI ===
@@ -111,7 +107,7 @@ local function RunScript()
 
     local Main = Instance.new("Frame")
     Main.Parent = Gui
-    Main.Size = UDim2.new(0, 200, 0, 360)
+    Main.Size = UDim2.new(0, 200, 0, 410)
     Main.Position = UDim2.new(1, -220, 0, 40)
     Main.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
     Main.BorderSizePixel = 0
@@ -151,10 +147,24 @@ local function RunScript()
     Content.Position = UDim2.new(0, 0, 0, 30)
     Content.BackgroundTransparency = 1
 
-    -- === ПЕТЫ В САМОМ ВЕРХУ ===
+    -- === СТАТИСТИКА (FPS, PING, PLAYERS) ===
+    local FPSLabel = Instance.new("TextLabel")
+    FPSLabel.Parent = Content
+    FPSLabel.Position = UDim2.new(0, 10, 0, 0)
+    FPSLabel.Size = UDim2.new(1, -20, 0, 18)
+    FPSLabel.BackgroundTransparency = 1
+    FPSLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+    FPSLabel.Font = Enum.Font.Gotham
+    FPSLabel.TextSize = 12
+    FPSLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+    local PingLabel = FPSLabel:Clone() PingLabel.Parent = Content PingLabel.Position = UDim2.new(0,10,0,20)
+    local PlayersLabel = FPSLabel:Clone() PlayersLabel.Parent = Content PlayersLabel.Position = UDim2.new(0,10,0,40)
+
+    -- === ПЕТЫ ===
     local PetsHeader = Instance.new("TextLabel")
     PetsHeader.Parent = Content
-    PetsHeader.Position = UDim2.new(0, 10, 0, 5)
+    PetsHeader.Position = UDim2.new(0, 10, 0, 65)
     PetsHeader.Size = UDim2.new(1, -20, 0, 20)
     PetsHeader.BackgroundTransparency = 1
     PetsHeader.Text = "🐾 Rare Pets:"
@@ -165,8 +175,8 @@ local function RunScript()
 
     local PetScrollFrame = Instance.new("ScrollingFrame")
     PetScrollFrame.Parent = Content
-    PetScrollFrame.Position = UDim2.new(0, 10, 0, 30)
-    PetScrollFrame.Size = UDim2.new(1, -20, 0, 110)
+    PetScrollFrame.Position = UDim2.new(0, 10, 0, 90)
+    PetScrollFrame.Size = UDim2.new(1, -20, 0, 100)
     PetScrollFrame.BackgroundTransparency = 1
     PetScrollFrame.ScrollBarThickness = 3
     PetScrollFrame.BorderSizePixel = 0
@@ -174,7 +184,7 @@ local function RunScript()
     PetListLayout.Parent = PetScrollFrame
     PetListLayout.Padding = UDim.new(0, 4)
 
-    -- === КНОПКИ НИЖЕ ===
+    -- === КНОПКИ ===
     local function CreateButton(text, yPos)
         local Button = Instance.new("TextButton")
         Button.Parent = Content
@@ -196,7 +206,7 @@ local function RunScript()
         return Button
     end
 
-    local startY = 150
+    local startY = 200
     local AutoHopBtn = CreateButton("🚀 Auto Hop: OFF", startY)
     local ServerHopButton = CreateButton("🔄 Server Hop", startY + 33)
     local LowPlayerButton = CreateButton("👥 Low Player Hop", startY + 66)
@@ -262,8 +272,15 @@ local function RunScript()
         end
     end)
 
-    -- Линии к петам
+    -- === ОБНОВЛЕНИЕ ESP ЛИНИЙ И FPS/PING ===
+    local Frames, LastUpdate = 0, tick()
     RunService.RenderStepped:Connect(function()
+        Frames += 1
+        if tick() - LastUpdate >= 1 then
+            if Main.Visible then FPSLabel.Text = "FPS: " .. Frames end
+            Frames, LastUpdate = 0, tick()
+        end
+
         if Drawing then
             for pet, line in pairs(Tracers) do
                 if pet and pet.Parent and (pet:FindFirstChildWhichIsA("BasePart", true) or pet.PrimaryPart) then
@@ -282,6 +299,19 @@ local function RunScript()
                     Tracers[pet] = nil
                 end
             end
+        end
+    end)
+
+    task.spawn(function()
+        while true do
+            pcall(function()
+                if Main.Visible and Content.Visible then
+                    local Ping = math.floor(Stats.Network.ServerStatsItem["Data Ping"]:GetValue())
+                    PingLabel.Text = "Ping: " .. Ping .. " ms"
+                    PlayersLabel.Text = "Players: " .. #Players:GetPlayers()
+                end
+            end)
+            task.wait(1)
         end
     end)
 
@@ -360,7 +390,7 @@ local function RunScript()
             end
         end
 
-        FoundRarePet = HasPets -- Обновляем глобальный флаг
+        FoundRarePet = HasPets
 
         if not HasPets then
             local EmptyLabel = Instance.new("TextLabel")
@@ -433,8 +463,11 @@ local function RunScript()
         if writefile then pcall(function() writefile(CacheFileName, HttpService:JSONEncode(serversList)) end) end
     end
 
+    local HopDebounce = false
     RandomServerHop = function()
-        ServerHopButton.Text = "⚡ Reading Cache..."
+        if HopDebounce then return end
+        HopDebounce = true
+        ServerHopButton.Text = "⚡ Hopping..."
         pcall(function()
             local Servers = GetCachedServers()
             local ValidIndices = {}
@@ -455,13 +488,20 @@ local function RunScript()
                 if writefile then pcall(function() writefile(CacheFileName, "[]") end) end
                 ServerHopButton.Text = "🔄 Fetching New..."
                 task.wait(0.5)
+                HopDebounce = false
                 RandomServerHop()
+                return
             end
         end)
+        
+        -- Снимаем лок через 5 сек (если телепорт не сработал по любой причине)
+        task.delay(5, function() HopDebounce = false; ServerHopButton.Text = "🔄 Server Hop" end)
     end
 
     local function LowPlayerHop()
-        LowPlayerButton.Text = "⚡ Reading Cache..."
+        if HopDebounce then return end
+        HopDebounce = true
+        LowPlayerButton.Text = "⚡ Hopping..."
         pcall(function()
             local Servers = GetCachedServers()
             local BestIndex, MinPlayers = -1, math.huge
@@ -481,15 +521,46 @@ local function RunScript()
                 if writefile then pcall(function() writefile(CacheFileName, "[]") end) end
                 LowPlayerButton.Text = "👥 Fetching New..."
                 task.wait(0.5)
+                HopDebounce = false
                 LowPlayerHop()
+                return
             end
         end)
+        task.delay(5, function() HopDebounce = false; LowPlayerButton.Text = "👥 Low Player Hop" end)
     end
 
     ServerHopButton.MouseButton1Click:Connect(RandomServerHop)
     LowPlayerButton.MouseButton1Click:Connect(LowPlayerHop)
     RejoinButton.MouseButton1Click:Connect(function() QueueNextTeleport(); TeleportService:TeleportToPlaceInstance(PlaceId, JobId, LocalPlayer) end)
     
+    ListButton.MouseButton1Click:Connect(function() ListFrame.Visible = not ListFrame.Visible end)
+
+    -- === ОБРАБОТЧИКИ ОШИБОК (ERROR 771 И ПР.) ===
+    local function HandleTeleportError()
+        HopDebounce = false -- Снимаем лок, если он был
+        task.wait(1.5)
+        -- Если у нас включен автохоп ИЛИ мы пытались хопнуться вручную
+        RandomServerHop()
+    end
+
+    -- Ловим ошибку иниациализации
+    TeleportService.TeleportInitFailed:Connect(HandleTeleportError)
+
+    -- Ловим GUI ошибку (как на твоем скриншоте)
+    pcall(function()
+        local coreGui = game:GetService("CoreGui")
+        local promptOverlay = coreGui:WaitForChild("RobloxPromptGui", 5) and coreGui.RobloxPromptGui:WaitForChild("promptOverlay", 5)
+        if promptOverlay then
+            promptOverlay.ChildAdded:Connect(function(child)
+                if child.Name == "ErrorPrompt" then
+                    HandleTeleportError()
+                end
+            end)
+        end
+    end)
+    -- Альтернативный отлов для некоторых экзекуторов
+    pcall(function() game:GetService("GuiService").ErrorMessageChanged:Connect(HandleTeleportError) end)
+
     -- === ЛОГИКА АВТОХОПА (ЖДЕТ 5 СЕК) ===
     task.spawn(function()
         if not game:IsLoaded() then game.Loaded:Wait() end
@@ -507,11 +578,11 @@ local function RunScript()
         Minimized = not Minimized
         Content.Visible = not Minimized
         if Minimized then ListFrame.Visible = false end
-        local TargetSize = Minimized and UDim2.new(0, 200, 0, 30) or UDim2.new(0, 200, 0, 360)
+        local TargetSize = Minimized and UDim2.new(0, 200, 0, 30) or UDim2.new(0, 200, 0, 410)
         TweenService:Create(Main, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Size = TargetSize }):Play()
     end)
     
-    print("Clean Pet Finder & Auto-Hop Loaded Successfully!")
+    print("Pet Finder + AutoHop & Anti-Error Loaded!")
 end
 
 RunScript()
