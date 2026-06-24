@@ -538,9 +538,8 @@ task.spawn(function()
                     local errorPrompt = overlay:FindFirstChild("ErrorPrompt")
                     -- Если мы видим ошибку (как на твоем скрине)
                     if errorPrompt and errorPrompt.Visible then
-                        errorPrompt.Visible = false -- Прячем это окно
+                            errorPrompt.Visible = false -- Прячем это окно
                         HopDebounce = false         -- Сбрасываем блокировку хопа
-                        RandomServerHop()           -- Сразу хопаемся на другой сервер
                     end
                 end
             end
@@ -549,15 +548,15 @@ task.spawn(function()
 end)
 
 -- Дублирующий обработчик на случай сбоя API телепорта
-TeleportService.TeleportInitFailed:Connect(function()
-    HopDebounce = false
-    RandomServerHop()
-end)
+--TeleportService.TeleportInitFailed:Connect(function()
+--    HopDebounce = false
+  --  RandomServerHop()
+--end)
 
 -- === ЛОГИКА АВТОХОПА (ЖДЕТ 5 СЕК) ===
 task.spawn(function()
     if not game:IsLoaded() then game.Loaded:Wait() end
-    task.wait(5) -- Ждем 5 секунд после прогрузки
+    task.wait(9) -- Ждем 5 секунд после прогрузки
     
     if Settings.AutoHop and not FoundRarePet then
         AutoHopBtn.Text = "⏳ Hopping..."
