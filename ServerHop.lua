@@ -1,3 +1,5 @@
+-- [[ БЛОК САМОВОСПРОИЗВЕДЕНИЯ (BOOTLOADER) ]]
+getgenv().PetFinderCode = [===[
 local function RunScript()
     local Players = game:GetService("Players")
     local TeleportService = game:GetService("TeleportService")
@@ -50,17 +52,12 @@ local function RunScript()
 
     -- === СПИСОК РЕДКИХ ПЕТОВ ===
     local WantedPets = {
-        Unicorn = true,
-        Raccoon = true,
-        Dragonfly = true,
-        Bee = true,
-        Bear = true,
-        -- Owl = true
+        Unicorn = true, Raccoon = true, Dragonfly = true, Bee = true, Bear = true
     }
 
     local Tracers = {} 
 
-    -- === АВТОМАТИЧЕСКИЙ АНТИ-ЛАГ (Очистка Gardens) ===
+    -- === АВТОМАТИЧЕСКИЙ АНТИ-ЛАГ ===
     task.spawn(function()
         local function SetupAntiLag()
             local gardens = workspace:WaitForChild("Gardens", 10)
@@ -87,10 +84,20 @@ local function RunScript()
         return false
     end
 
+    -- === 🔥 МАГИЯ: АВТО-ИНЖЕКТ ПРИ ТЕЛЕПОРТЕ 🔥 ===
     local function QueueNextTeleport()
-        if queue_on_teleport then
+        local qot = queue_on_teleport or (syn and syn.queue_on_teleport)
+        if qot and getgenv().PetFinderCode then
             local data = HttpService:JSONEncode(RecentServers)
-            queue_on_teleport([[ getgenv().RecentServers = game:GetService("HttpService"):JSONDecode(']].. data ..[[') ]])
+            
+            -- 1. Восстанавливаем список пройденных серверов
+            local stateCode = "getgenv().RecentServers = game:GetService('HttpService'):JSONDecode('".. data .."');\n"
+            
+            -- 2. Заставляем скрипт загрузить свой собственный код на новом сервере!
+            local bootloaderCode = "getgenv().PetFinderCode = [===[" .. getgenv().PetFinderCode .. "]===];\nloadstring(getgenv().PetFinderCode)();"
+            
+            -- Ставим это всё в очередь до следующего сервера
+            qot(stateCode .. bootloaderCode)
         end
     end
 
@@ -142,7 +149,6 @@ local function RunScript()
     Minimize.BackgroundColor3 = Color3.fromRGB(55, 55, 60)
     Instance.new("UICorner", Minimize).CornerRadius = UDim.new(0, 6)
 
-    -- Контейнер с автоматической сортировкой
     local Content = Instance.new("Frame")
     Content.Parent = Main
     Content.Size = UDim2.new(1, 0, 1, -30)
@@ -179,7 +185,6 @@ local function RunScript()
     PlayersLabel.Parent = StatsFrame
     PlayersLabel.Position = UDim2.new(0, 0, 0, 36)
 
-    -- === ЗАГОЛОВОК ПЕТОВ ===
     local PetsHeader = Instance.new("TextLabel")
     PetsHeader.Parent = Content
     PetsHeader.Size = UDim2.new(1, -20, 0, 20)
@@ -191,7 +196,6 @@ local function RunScript()
     PetsHeader.TextXAlignment = Enum.TextXAlignment.Left
     PetsHeader.LayoutOrder = 2
 
-    -- === СПИСОК ПЕТОВ ===
     local PetScrollFrame = Instance.new("ScrollingFrame")
     PetScrollFrame.Parent = Content
     PetScrollFrame.Size = UDim2.new(1, -20, 0, 100)
@@ -245,7 +249,6 @@ local function RunScript()
         SaveSettings()
     end)
 
-    -- === ЛИСТ КЕШИРОВАННЫХ СЕРВЕРОВ ===
     local ListFrame = Instance.new("Frame")
     ListFrame.Parent = Main
     ListFrame.Size = UDim2.new(0, 190, 1, 0)
@@ -292,7 +295,6 @@ local function RunScript()
         end
     end)
 
-    -- === ОБНОВЛЕНИЕ ESP ЛИНИЙ И FPS/PING ===
     local Frames, LastUpdate = 0, tick()
     RunService.RenderStepped:Connect(function()
         Frames += 1
@@ -335,7 +337,7 @@ local function RunScript()
         end
     end)
 
-    -- === РАДАР ПЕТОВ (БЕЗ ТП) ===
+    -- === РАДАР ПЕТОВ ===
     local function PopulatePetList()
         for _, child in ipairs(PetScrollFrame:GetChildren()) do
             if child:IsA("TextLabel") then child:Destroy() end
@@ -368,7 +370,6 @@ local function RunScript()
                         Tracers[petModel] = line
                     end
 
-                    -- Просто отображаем имя пета (без кнопки)
                     local NameLabel = Instance.new("TextLabel")
                     NameLabel.Parent = PetScrollFrame
                     NameLabel.Size = UDim2.new(1, 0, 0, 20)
@@ -486,7 +487,6 @@ local function RunScript()
             end
         end)
         
-        -- Тайм-аут на случай если роблокс просто завис и ничего не делает
         task.delay(10, function() HopDebounce = false; ServerHopButton.Text = "🔄 Server Hop" end)
     end
 
@@ -527,7 +527,6 @@ local function RunScript()
     
     ListButton.MouseButton1Click:Connect(function() ListFrame.Visible = not ListFrame.Visible end)
 
-    -- === МОЩНЫЙ ОБРАБОТЧИК ОШИБОК 771/772 (АВТОМАТИЧЕСКИЙ ПРОПУСК) ===
     task.spawn(function()
         while task.wait(0.5) do
             pcall(function()
@@ -536,11 +535,10 @@ local function RunScript()
                     local overlay = prompt:FindFirstChild("promptOverlay")
                     if overlay then
                         local errorPrompt = overlay:FindFirstChild("ErrorPrompt")
-                        -- Если мы видим ошибку (как на твоем скрине)
                         if errorPrompt and errorPrompt.Visible then
-                            errorPrompt.Visible = false -- Прячем это окно
-                            HopDebounce = false         -- Сбрасываем блокировку хопа
-                            RandomServerHop()           -- Сразу хопаемся на другой сервер
+                            errorPrompt.Visible = false 
+                            HopDebounce = false         
+                            RandomServerHop()           
                         end
                     end
                 end
@@ -548,16 +546,14 @@ local function RunScript()
         end
     end)
     
-    -- Дублирующий обработчик на случай сбоя API телепорта
     TeleportService.TeleportInitFailed:Connect(function()
         HopDebounce = false
         RandomServerHop()
     end)
 
-    -- === ЛОГИКА АВТОХОПА (ЖДЕТ 5 СЕК) ===
     task.spawn(function()
         if not game:IsLoaded() then game.Loaded:Wait() end
-        task.wait(5) -- Ждем 5 секунд после прогрузки
+        task.wait(5) 
         
         if Settings.AutoHop and not FoundRarePet then
             AutoHopBtn.Text = "⏳ Hopping..."
@@ -565,7 +561,6 @@ local function RunScript()
         end
     end)
 
-    -- СВОРАЧИВАНИЕ GUI
     local Minimized = false
     Minimize.MouseButton1Click:Connect(function()
         Minimized = not Minimized
@@ -575,7 +570,11 @@ local function RunScript()
         TweenService:Create(Main, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Size = TargetSize }):Play()
     end)
     
-    print("UI Fixed, Anti-Error Loop Active, TP Removed!")
+    print("UI Fixed, Anti-Error Loop Active, Auto-Inject Ready!")
 end
 
 RunScript()
+]===]
+
+-- Запускаем код на текущем сервере (на последующих он сделает это сам)
+loadstring(getgenv().PetFinderCode)()
