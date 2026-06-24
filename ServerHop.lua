@@ -21,22 +21,16 @@ local function RunScript()
     local StartTime = tick()
     local HopCount = 0
     local RecentServers = {}
-    
-    -- Название файла кэша для конкретной игры
     local CacheFileName = "HopCache_" .. PlaceId .. ".json"
 
     local function AddRecentServer(id)
         table.insert(RecentServers, 1, id)
-        while #RecentServers > 20 do
-            table.remove(RecentServers)
-        end
+        while #RecentServers > 20 do table.remove(RecentServers) end
     end
 
     AddRecentServer(JobId)
 
-    if getgenv().RecentServers then
-        RecentServers = getgenv().RecentServers
-    end
+    if getgenv().RecentServers then RecentServers = getgenv().RecentServers end
 
     local function IsRecent(id)
         for _, v in ipairs(RecentServers) do
@@ -61,14 +55,16 @@ local function RunScript()
         end)
     end)
 
+    -- === СОЗДАНИЕ GUI ===
     local Gui = Instance.new("ScreenGui")
     Gui.Name = "HopGui"
     Gui.ResetOnSpawn = false
     Gui.Parent = game.CoreGui
 
+    -- Основное окно (чуть удлинили для новой кнопки)
     local Main = Instance.new("Frame")
     Main.Parent = Gui
-    Main.Size = UDim2.new(0,180,0,290)
+    Main.Size = UDim2.new(0,180,0,325)
     Main.Position = UDim2.new(1,-210,0,40)
     Main.BackgroundColor3 = Color3.fromRGB(28,28,28)
     Main.BorderSizePixel = 0
@@ -149,70 +145,76 @@ local function RunScript()
         Corner.CornerRadius = UDim.new(0,10)
         Corner.Parent = Button
 
-        local EnterTween = TweenService:Create(
-            Button,
-            TweenInfo.new(0.15),
-            { BackgroundColor3 = Color3.fromRGB(70,70,70) }
-        )
-
-        local LeaveTween = TweenService:Create(
-            Button,
-            TweenInfo.new(0.15),
-            { BackgroundColor3 = Color3.fromRGB(45,45,45) }
-        )
+        local EnterTween = TweenService:Create(Button, TweenInfo.new(0.15), { BackgroundColor3 = Color3.fromRGB(70,70,70) })
+        local LeaveTween = TweenService:Create(Button, TweenInfo.new(0.15), { BackgroundColor3 = Color3.fromRGB(45,45,45) })
 
         Button.MouseEnter:Connect(function() EnterTween:Play() end)
         Button.MouseLeave:Connect(function() LeaveTween:Play() end)
-
         return Button
     end
 
-    local ServerHopButton = CreateButton("🔄 Server Hop",180)
-    local LowPlayerButton = CreateButton("👥 Low Player Hop",214)
-    local RejoinButton = CreateButton("↻ Rejoin",248)
+    local ServerHopButton = CreateButton("🔄 Server Hop", 180)
+    local LowPlayerButton = CreateButton("👥 Low Player Hop", 214)
+    local RejoinButton = CreateButton("↻ Rejoin", 248)
+    local ListButton = CreateButton("📜 Server List", 282)
 
-    local Dragging = false
-    local DragInput
-    local DragStart
-    local StartPos
+    -- === ПАНЕЛЬ СО СПИСКОМ СЕРВЕРОВ ===
+    local ListFrame = Instance.new("Frame")
+    ListFrame.Parent = Main
+    ListFrame.Size = UDim2.new(0, 180, 1, 0)
+    ListFrame.Position = UDim2.new(0, -190, 0, 0) -- Выезжает слева от основы
+    ListFrame.BackgroundColor3 = Color3.fromRGB(28,28,28)
+    ListFrame.Visible = false
+    ListFrame.ClipsDescendants = true
 
+    local ListCorner = Instance.new("UICorner")
+    ListCorner.CornerRadius = UDim.new(0,12)
+    ListCorner.Parent = ListFrame
+
+    local ListTitle = Title:Clone()
+    ListTitle.Parent = ListFrame
+    ListTitle.Text = "Cached Servers"
+
+    local ScrollFrame = Instance.new("ScrollingFrame")
+    ScrollFrame.Parent = ListFrame
+    ScrollFrame.Size = UDim2.new(1, -10, 1, -35)
+    ScrollFrame.Position = UDim2.new(0, 5, 0, 30)
+    ScrollFrame.BackgroundTransparency = 1
+    ScrollFrame.ScrollBarThickness = 4
+    ScrollFrame.BorderSizePixel = 0
+
+    local ListLayout = Instance.new("UIListLayout")
+    ListLayout.Parent = ScrollFrame
+    ListLayout.Padding = UDim.new(0, 5)
+    ListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+
+    -- Драг (перетаскивание окна)
+    local Dragging, DragInput, DragStart, StartPos
     Main.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            Dragging = true
-            DragStart = input.Position
-            StartPos = Main.Position
-
+            Dragging, DragStart, StartPos = true, input.Position, Main.Position
             input.Changed:Connect(function()
                 if input.UserInputState == Enum.UserInputState.End then Dragging = false end
             end)
         end
     end)
-
     Main.InputChanged:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseMovement then DragInput = input end
     end)
-
     UserInputService.InputChanged:Connect(function(input)
         if input == DragInput and Dragging then
             local Delta = input.Position - DragStart
-            Main.Position = UDim2.new(
-                StartPos.X.Scale, StartPos.X.Offset + Delta.X,
-                StartPos.Y.Scale, StartPos.Y.Offset + Delta.Y
-            )
+            Main.Position = UDim2.new(StartPos.X.Scale, StartPos.X.Offset + Delta.X, StartPos.Y.Scale, StartPos.Y.Offset + Delta.Y)
         end
     end)
 
-    local FPS = 0
-    local Frames = 0
-    local LastUpdate = tick()
-
+    -- FPS/Ping каунтер
+    local Frames, LastUpdate = 0, tick()
     RunService.RenderStepped:Connect(function()
         if not Main.Visible then return end
         Frames += 1
         if tick() - LastUpdate >= 1 then
-            FPS = Frames
-            Frames = 0
-            LastUpdate = tick()
+            FPS, Frames, LastUpdate = Frames, 0, tick()
         end
     end)
 
@@ -224,12 +226,8 @@ local function RunScript()
                     FPSLabel.Text = "FPS: "..FPS
                     PingLabel.Text = "Ping: "..Ping.." ms"
                     PlayersLabel.Text = "Players: "..#Players:GetPlayers()
-
                     local Runtime = math.floor(tick() - StartTime)
-                    local Minutes = math.floor(Runtime / 60)
-                    local Seconds = Runtime % 60
-
-                    RuntimeLabel.Text = string.format("Runtime: %02d:%02d", Minutes, Seconds)
+                    RuntimeLabel.Text = string.format("Runtime: %02d:%02d", math.floor(Runtime/60), Runtime%60)
                     HopsLabel.Text = "Hops: "..HopCount
                     RamLabel.Text = "RAM: "..math.floor(Stats:GetTotalMemoryUsageMb()).." MB"
                     ServerTimeLabel.Text = "Server: "..math.floor(workspace.DistributedGameTime).." s"
@@ -239,7 +237,7 @@ local function RunScript()
         end
     end)
 
-    -- ФУНКЦИЯ 1: Долгий процесс скачивания всех серверов с API
+    -- === ЛОГИКА КЭШИРОВАНИЯ ===
     local function FetchAllServers()
         if not Request then return {} end
         local Servers = {}
@@ -248,72 +246,110 @@ local function RunScript()
             repeat
                 local URL = "https://games.roblox.com/v1/games/" .. PlaceId .. "/servers/Public?sortOrder=Asc&limit=100"
                 if Cursor ~= "" then URL = URL .. "&cursor=" .. Cursor end
-
                 local Response = Request({ Url = URL, Method = "GET" })
                 local Data = HttpService:JSONDecode(Response.Body)
-
-                for _, Server in ipairs(Data.data) do
-                    table.insert(Servers, Server)
-                end
+                for _, Server in ipairs(Data.data) do table.insert(Servers, Server) end
                 Cursor = Data.nextPageCursor or ""
             until Cursor == ""
         end)
         return Servers
     end
 
-    -- ФУНКЦИЯ 2: Чтение из файла (моментально) или скачивание, если файла нет
     local function GetCachedServers()
         if isfile and readfile and writefile then
             if isfile(CacheFileName) then
                 local success, data = pcall(function() return HttpService:JSONDecode(readfile(CacheFileName)) end)
-                if success and type(data) == "table" and #data > 0 then
-                    return data
-                end
+                if success and type(data) == "table" and #data > 0 then return data end
             end
-            -- Если кэш пустой, собираем сервера заново и сохраняем
             local newServers = FetchAllServers()
             pcall(function() writefile(CacheFileName, HttpService:JSONEncode(newServers)) end)
             return newServers
         end
-        -- Если чит не поддерживает файлы, качаем напрямую
         return FetchAllServers()
     end
 
-    -- ФУНКЦИЯ 3: Обновление файла после использования сервера
     local function UpdateCacheFile(serversList)
-        if writefile then
-            pcall(function() writefile(CacheFileName, HttpService:JSONEncode(serversList)) end)
-        end
+        if writefile then pcall(function() writefile(CacheFileName, HttpService:JSONEncode(serversList)) end) end
     end
 
+    -- === ЛОГИКА ОТРИСОВКИ СПИСКА ===
+    local function PopulateServerList()
+        -- Очищаем старые кнопки
+        for _, child in ipairs(ScrollFrame:GetChildren()) do
+            if child:IsA("TextButton") then child:Destroy() end
+        end
+
+        ListTitle.Text = "Loading..."
+        local Servers = GetCachedServers()
+        ListTitle.Text = "Cached Servers ("..#Servers..")"
+
+        -- Сортируем от меньшего онлайна к большему
+        table.sort(Servers, function(a,b) return (a.playing or 0) < (b.playing or 0) end)
+
+        for i, Server in ipairs(Servers) do
+            if Server.id ~= JobId and Server.playing < Server.maxPlayers then
+                local SBtn = Instance.new("TextButton")
+                SBtn.Parent = ScrollFrame
+                SBtn.Size = UDim2.new(1, -8, 0, 30)
+                SBtn.BackgroundColor3 = Color3.fromRGB(45,45,45)
+                SBtn.BorderSizePixel = 0
+                SBtn.TextColor3 = Color3.new(1,1,1)
+                SBtn.Font = Enum.Font.Gotham
+                SBtn.TextSize = 12
+                SBtn.Text = "👥 " .. Server.playing .. "/" .. Server.maxPlayers .. " | Join >"
+
+                local SCorner = Instance.new("UICorner")
+                SCorner.CornerRadius = UDim.new(0, 6)
+                SCorner.Parent = SBtn
+
+                SBtn.MouseButton1Click:Connect(function()
+                    SBtn.Text = "Teleporting..."
+                    HopCount += 1
+                    AddRecentServer(Server.id)
+                    getgenv().RecentServers = RecentServers
+                    
+                    -- Удаляем сервер из кэша, чтобы он не висел в списке вечно
+                    table.remove(Servers, i)
+                    UpdateCacheFile(Servers)
+
+                    QueueNextTeleport()
+                    TeleportService:TeleportToPlaceInstance(PlaceId, Server.id, LocalPlayer)
+                end)
+            end
+        end
+        ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, ListLayout.AbsoluteContentSize.Y + 10)
+    end
+
+    -- Показать/скрыть список серверов
+    ListButton.MouseButton1Click:Connect(function()
+        ListFrame.Visible = not ListFrame.Visible
+        if ListFrame.Visible then
+            task.spawn(PopulateServerList)
+        end
+    end)
+
+    -- === ОБЫЧНЫЕ КНОПКИ ХОПА (Авто) ===
     local function RandomServerHop()
         ServerHopButton.Text = "⚡ Reading Cache..."
         pcall(function()
             local Servers = GetCachedServers()
             local ValidIndices = {}
-
             for i, Server in ipairs(Servers) do
                 if Server.id ~= JobId and Server.playing < Server.maxPlayers and not IsRecent(Server.id) then
-                    table.insert(ValidIndices, i) -- Сохраняем индекс, чтобы потом удалить из кэша
+                    table.insert(ValidIndices, i)
                 end
             end
-
             if #ValidIndices > 0 then
                 local RandomIdx = ValidIndices[math.random(1, #ValidIndices)]
                 local SelectedServer = Servers[RandomIdx]
-
-                -- Удаляем выбранный сервер из таблицы и перезаписываем файл кэша
                 table.remove(Servers, RandomIdx)
                 UpdateCacheFile(Servers)
-
                 HopCount += 1
                 AddRecentServer(SelectedServer.id)
                 getgenv().RecentServers = RecentServers
-
                 QueueNextTeleport()
                 TeleportService:TeleportToPlaceInstance(PlaceId, SelectedServer.id, LocalPlayer)
             else
-                -- Если все сервера в кэше перебрали, обнуляем файл и запускаем поиск заново
                 if writefile then pcall(function() writefile(CacheFileName, "[]") end) end
                 ServerHopButton.Text = "🔄 Fetching New..."
                 task.wait(0.5)
@@ -326,31 +362,19 @@ local function RunScript()
         LowPlayerButton.Text = "⚡ Reading Cache..."
         pcall(function()
             local Servers = GetCachedServers()
-            
-            local BestIndex = -1
-            local MinPlayers = math.huge
-
-            -- Ищем сервер с минимальным онлайном напрямую в кэше
+            local BestIndex, MinPlayers = -1, math.huge
             for i, Server in ipairs(Servers) do
                 if Server.id ~= JobId and Server.playing < Server.maxPlayers and not IsRecent(Server.id) then
-                    if Server.playing < MinPlayers then
-                        MinPlayers = Server.playing
-                        BestIndex = i
-                    end
+                    if Server.playing < MinPlayers then MinPlayers, BestIndex = Server.playing, i end
                 end
             end
-
             if BestIndex ~= -1 then
                 local SelectedServer = Servers[BestIndex]
-
-                -- Удаляем сервер из кэша
                 table.remove(Servers, BestIndex)
                 UpdateCacheFile(Servers)
-
                 HopCount += 1
                 AddRecentServer(SelectedServer.id)
                 getgenv().RecentServers = RecentServers
-
                 QueueNextTeleport()
                 TeleportService:TeleportToPlaceInstance(PlaceId, SelectedServer.id, LocalPlayer)
             else
@@ -373,64 +397,14 @@ local function RunScript()
     LowPlayerButton.MouseButton1Click:Connect(LowPlayerHop)
     RejoinButton.MouseButton1Click:Connect(Rejoin)
 
-    local Hidden = false
-    local SavedPosition = Main.Position
-
-    local function ToggleGui()
-        pcall(function()
-            if Hidden then
-                Main.Visible = true
-                local ShowTween = TweenService:Create(Main, TweenInfo.new(0.2, Enum.EasingStyle.Quad), { Position = SavedPosition })
-                ShowTween:Play()
-                Hidden = false
-            else
-                SavedPosition = Main.Position
-                local HideTween = TweenService:Create(Main, TweenInfo.new(0.2, Enum.EasingStyle.Quad), { Position = UDim2.new(SavedPosition.X.Scale, SavedPosition.X.Offset + 220, SavedPosition.Y.Scale, SavedPosition.Y.Offset) })
-                HideTween:Play()
-                Hidden = true
-                task.delay(0.2, function()
-                    if Hidden then Main.Visible = false end
-                end)
-            end
-        end)
-    end
-
-    UserInputService.InputBegan:Connect(function(input, gameProcessed)
-        if gameProcessed then return end
-        pcall(function()
-            if input.KeyCode == Enum.KeyCode.H then ToggleGui()
-            elseif input.KeyCode == Enum.KeyCode.J then RandomServerHop()
-            elseif input.KeyCode == Enum.KeyCode.K then LowPlayerHop()
-            elseif input.KeyCode == Enum.KeyCode.L then Rejoin()
-            end
-        end)
-    end)
-
-    local function UpdatePlayers()
-        pcall(function()
-            if Main.Visible then PlayersLabel.Text = "Players: "..#Players:GetPlayers() end
-        end)
-    end
-    Players.PlayerAdded:Connect(UpdatePlayers)
-    Players.PlayerRemoving:Connect(UpdatePlayers)
-
-    math.randomseed(os.time())
-
-    TeleportService.TeleportInitFailed:Connect(function()
-        task.wait(2)
-        pcall(RandomServerHop)
-    end)
-
-    print("Server Tools Loaded with File Caching!")
-
+    -- Свернуть
     local Minimized = false
-
     Minimize.MouseButton1Click:Connect(function()
         Minimized = not Minimized
-        local Elements = { ServerHopButton, LowPlayerButton, RejoinButton, FPSLabel, PingLabel, PlayersLabel, RuntimeLabel, HopsLabel, RamLabel, ServerTimeLabel }
+        local Elements = { ServerHopButton, LowPlayerButton, RejoinButton, ListButton, FPSLabel, PingLabel, PlayersLabel, RuntimeLabel, HopsLabel, RamLabel, ServerTimeLabel }
         for _, element in ipairs(Elements) do element.Visible = not Minimized end
-
-        local TargetSize = Minimized and UDim2.new(0,180,0,30) or UDim2.new(0,180,0,290)
+        if Minimized then ListFrame.Visible = false end -- Скрываем список при сворачивании
+        local TargetSize = Minimized and UDim2.new(0,180,0,30) or UDim2.new(0,180,0,325)
         TweenService:Create(Main, TweenInfo.new(0.2), { Size = TargetSize }):Play()
     end)
 end
