@@ -60,19 +60,34 @@ local WantedPets = {
 
 local Tracers = {} 
 
--- === АВТОМАТИЧЕСКИЙ АНТИ-ЛАГ (Очистка Gardens) ===
+-- === АВТОМАТИЧЕСКИЙ АНТИ-ЛАГ ===
 task.spawn(function()
-    local function SetupAntiLag()
-        local gardens = workspace:WaitForChild("Gardens", 10)
-        if not gardens then return end
-        local function CleanPlot(plot)
-            for _, item in ipairs(plot:GetChildren()) do pcall(function() item:Destroy() end) end
-            plot.ChildAdded:Connect(function(item) pcall(function() item:Destroy() end) end)
+    local gardens = workspace:WaitForChild("Gardens", 10)
+    if not gardens then return end
+    
+    local function CleanPlot(plot)
+        for _, item in ipairs(plot:GetChildren()) do 
+            if item:IsA("Model") or item:IsA("BasePart") then
+                pcall(function() item:Destroy() end) 
+            end
         end
-        for _, plot in ipairs(gardens:GetChildren()) do CleanPlot(plot) end
-        gardens.ChildAdded:Connect(function(plot) task.wait() CleanPlot(plot) end)
     end
-    pcall(SetupAntiLag)
+
+    local function MonitorPlot(plot)
+        CleanPlot(plot)
+        plot.ChildAdded:Connect(function(item)
+            task.wait()
+            pcall(function() item:Destroy() end)
+        end)
+    end
+
+    for _, plot in ipairs(gardens:GetChildren()) do
+        task.spawn(MonitorPlot, plot)
+    end
+    gardens.ChildAdded:Connect(function(plot)
+        task.wait()
+        MonitorPlot(plot)
+    end)
 end)
 
 -- === ЛОГИКА СЕРВЕРОВ ===
@@ -125,8 +140,8 @@ Title.Parent = TopBar
 Title.Size = UDim2.new(1, -30, 1, 0)
 Title.Position = UDim2.new(0, 10, 0, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "Pet Finder"
-Title.TextColor3 = Color3.new(1, 1, 1)
+Title.Text = "Pet Finder v2.1 (Optimized)"
+Title.TextColor3 = Color3.new(0.5, 1, 0.5)
 Title.Font = Enum.Font.GothamBold
 Title.TextSize = 14
 Title.TextXAlignment = Enum.TextXAlignment.Left
@@ -295,26 +310,30 @@ end)
 -- === ОБНОВЛЕНИЕ ESP ЛИНИЙ И FPS/PING ===
 local Frames, LastUpdate = 0, tick()
 RunService.RenderStepped:Connect(function()
+    if not Main.Visible then return end
+    
     Frames += 1
     if tick() - LastUpdate >= 1 then
-        if Main.Visible then FPSLabel.Text = "FPS: " .. Frames end
+        FPSLabel.Text = "FPS: " .. Frames
         Frames, LastUpdate = 0, tick()
     end
 
-    if Drawing then
+    if Drawing and Tracers then
         for pet, line in pairs(Tracers) do
-            if pet and pet.Parent and (pet:FindFirstChildWhichIsA("BasePart", true) or pet.PrimaryPart) then
+            if pet and pet.Parent then
                 local part = pet:FindFirstChildWhichIsA("BasePart", true) or pet.PrimaryPart
-                local vector, onScreen = Camera:WorldToViewportPoint(part.Position)
-                if onScreen then
-                    line.From = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
-                    line.To = Vector2.new(vector.X, vector.Y)
-                    line.Visible = true
-                else
-                    line.Visible = false
+                if part then
+                    local vector, onScreen = Camera:WorldToViewportPoint(part.Position)
+                    if onScreen then
+                        line.From = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
+                        line.To = Vector2.new(vector.X, vector.Y)
+                        line.Visible = true
+                        continue
+                    end
                 end
-            else
-                line.Visible = false
+            end
+            line.Visible = false
+            if not pet or not pet.Parent then
                 line:Remove()
                 Tracers[pet] = nil
             end
@@ -335,15 +354,14 @@ task.spawn(function()
     end
 end)
 
--- === РАДАР ПЕТОВ (БЕЗ ТП) ===
-local function PopulatePetList()
-    for _, child in ipairs(PetScrollFrame:GetChildren()) do
-        if child:IsA("TextLabel") then child:Destroy() end
-    end
+-- === РАДАР ПЕТОВ ===
+local PetLabels = {}
 
+local function PopulatePetList()
     local MapFolder = workspace:FindFirstChild("Map")
     local WildPetSpawns = MapFolder and MapFolder:FindFirstChild("WildPetSpawns")
     local HasPets = false
+    local FoundThisTime = {}
 
     if WildPetSpawns then
         for _, petModel in ipairs(WildPetSpawns:GetChildren()) do
@@ -359,6 +377,8 @@ local function PopulatePetList()
 
             if matchedName then
                 HasPets = true
+                FoundThisTime[petModel] = matchedName
+                
                 if not Tracers[petModel] and Drawing then
                     local line = Drawing.new("Line")
                     line.Visible = false
@@ -368,32 +388,48 @@ local function PopulatePetList()
                     Tracers[petModel] = line
                 end
 
-                -- Просто отображаем имя пета (без кнопки)
-                local NameLabel = Instance.new("TextLabel")
-                NameLabel.Parent = PetScrollFrame
-                NameLabel.Size = UDim2.new(1, 0, 0, 20)
-                NameLabel.BackgroundTransparency = 1
-                NameLabel.Text = "• " .. matchedName
-                NameLabel.TextColor3 = Color3.new(1, 1, 1)
-                NameLabel.Font = Enum.Font.Gotham
-                NameLabel.TextSize = 13
-                NameLabel.TextXAlignment = Enum.TextXAlignment.Left
+                if not PetLabels[petModel] then
+                    local NameLabel = Instance.new("TextLabel")
+                    NameLabel.Parent = PetScrollFrame
+                    NameLabel.Size = UDim2.new(1, 0, 0, 20)
+                    NameLabel.BackgroundTransparency = 1
+                    NameLabel.Text = "• " .. matchedName
+                    NameLabel.TextColor3 = Color3.new(1, 1, 1)
+                    NameLabel.Font = Enum.Font.Gotham
+                    NameLabel.TextSize = 13
+                    NameLabel.TextXAlignment = Enum.TextXAlignment.Left
+                    PetLabels[petModel] = NameLabel
+                end
             end
+        end
+    end
+
+    -- Очистка старых меток
+    for petModel, label in pairs(PetLabels) do
+        if not FoundThisTime[petModel] then
+            label:Destroy()
+            PetLabels[petModel] = nil
         end
     end
 
     FoundRarePet = HasPets
 
+    local EmptyLabel = PetScrollFrame:FindFirstChild("EmptyLabel")
     if not HasPets then
-        local EmptyLabel = Instance.new("TextLabel")
-        EmptyLabel.Parent = PetScrollFrame
-        EmptyLabel.Size = UDim2.new(1, 0, 0, 20)
-        EmptyLabel.BackgroundTransparency = 1
-        EmptyLabel.Text = "No rare pets found..."
-        EmptyLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
-        EmptyLabel.Font = Enum.Font.Gotham
-        EmptyLabel.TextSize = 11
-        EmptyLabel.TextXAlignment = Enum.TextXAlignment.Left
+        if not EmptyLabel then
+            EmptyLabel = Instance.new("TextLabel")
+            EmptyLabel.Name = "EmptyLabel"
+            EmptyLabel.Parent = PetScrollFrame
+            EmptyLabel.Size = UDim2.new(1, 0, 0, 20)
+            EmptyLabel.BackgroundTransparency = 1
+            EmptyLabel.Text = "No rare pets found..."
+            EmptyLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
+            EmptyLabel.Font = Enum.Font.Gotham
+            EmptyLabel.TextSize = 11
+            EmptyLabel.TextXAlignment = Enum.TextXAlignment.Left
+        end
+    elseif EmptyLabel then
+        EmptyLabel:Destroy()
     end
 
     PetScrollFrame.CanvasSize = UDim2.new(0, 0, 0, PetListLayout.AbsoluteContentSize.Y + 5)
@@ -403,11 +439,10 @@ task.spawn(function()
     local MapFolder = workspace:WaitForChild("Map", 10)
     local WildPetSpawns = MapFolder and MapFolder:WaitForChild("WildPetSpawns", 10)
     if WildPetSpawns then
-        WildPetSpawns.ChildAdded:Connect(function() task.wait(0.3) PopulatePetList() end)
+        WildPetSpawns.ChildAdded:Connect(function() task.delay(0.1, PopulatePetList) end)
         WildPetSpawns.ChildRemoved:Connect(function(child) 
             if Tracers[child] then Tracers[child]:Remove(); Tracers[child] = nil end
-            task.wait(0.3) 
-            PopulatePetList() 
+            task.delay(0.1, PopulatePetList)
         end)
     end
 end)
@@ -416,6 +451,9 @@ PopulatePetList()
 -- === СИСТЕМА КЭШИРОВАНИЯ СЕРВЕРОВ И ХОПОВ ===
 local function FetchAllServers()
     local Servers = {}
+    local MaxPages = 10 -- Больше 1000 серверов проверять бессмысленно и опасно для стабильности
+    local PageCount = 0
+    
     if Request then
         pcall(function()
             local Cursor = ""
@@ -424,15 +462,21 @@ local function FetchAllServers()
                 if Cursor ~= "" then URL = URL .. "&cursor=" .. Cursor end
                 local Response = Request({ Url = URL, Method = "GET" })
                 local Data = HttpService:JSONDecode(Response.Body)
-                for _, Server in ipairs(Data.data) do table.insert(Servers, Server) end
-                Cursor = Data.nextPageCursor or ""
+                if Data and Data.data then
+                    for _, Server in ipairs(Data.data) do table.insert(Servers, Server) end
+                    Cursor = Data.nextPageCursor or ""
+                end
+                PageCount += 1
+                if PageCount >= MaxPages then break end
             until Cursor == ""
         end)
     else
         pcall(function()
             local res = game:HttpGet("https://games.roblox.com/v1/games/" .. PlaceId .. "/servers/Public?sortOrder=Asc&limit=100")
             local Data = HttpService:JSONDecode(res)
-            for _, Server in ipairs(Data.data) do table.insert(Servers, Server) end
+            if Data and Data.data then
+                for _, Server in ipairs(Data.data) do table.insert(Servers, Server) end
+            end
         end)
     end
     return Servers
@@ -464,9 +508,7 @@ RandomServerHop = function()
         local Servers = GetCachedServers()
         local ValidIndices = {}
         for i, Server in ipairs(Servers) do
-            if Server.id ~= JobId
-and Server.playing < (Server.maxPlayers - 2)
-and not IsRecent(Server.id) then
+            if Server.id ~= JobId and Server.playing < Server.maxPlayers and not IsRecent(Server.id) then
                 table.insert(ValidIndices, i)
             end
         end
@@ -477,11 +519,20 @@ and not IsRecent(Server.id) then
             UpdateCacheFile(Servers)
             AddRecentServer(SelectedServer.id)
             QueueNextTeleport()
-            TeleportService:TeleportToPlaceInstance(PlaceId, SelectedServer.id, LocalPlayer)
+            
+            local success, err = pcall(function()
+                TeleportService:TeleportToPlaceInstance(PlaceId, SelectedServer.id, LocalPlayer)
+            end)
+            if not success then
+                HopDebounce = false
+                ServerHopButton.Text = "❌ Error, Retrying..."
+                task.wait(1)
+                RandomServerHop()
+            end
         else
             if writefile then pcall(function() writefile(CacheFileName, "[]") end) end
             ServerHopButton.Text = "🔄 Fetching New..."
-            task.wait(0.5)
+            task.wait(1)
             HopDebounce = false
             RandomServerHop()
             return
@@ -510,11 +561,20 @@ local function LowPlayerHop()
             UpdateCacheFile(Servers)
             AddRecentServer(SelectedServer.id)
             QueueNextTeleport()
-            TeleportService:TeleportToPlaceInstance(PlaceId, SelectedServer.id, LocalPlayer)
+            
+            local success, err = pcall(function()
+                TeleportService:TeleportToPlaceInstance(PlaceId, SelectedServer.id, LocalPlayer)
+            end)
+            if not success then
+                HopDebounce = false
+                LowPlayerButton.Text = "❌ Error, Retrying..."
+                task.wait(1)
+                LowPlayerHop()
+            end
         else
             if writefile then pcall(function() writefile(CacheFileName, "[]") end) end
             LowPlayerButton.Text = "👥 Fetching New..."
-            task.wait(0.5)
+            task.wait(1)
             HopDebounce = false
             LowPlayerHop()
             return
@@ -529,20 +589,20 @@ RejoinButton.MouseButton1Click:Connect(function() QueueNextTeleport(); TeleportS
 
 ListButton.MouseButton1Click:Connect(function() ListFrame.Visible = not ListFrame.Visible end)
 
--- === МОЩНЫЙ ОБРАБОТЧИК ОШИБОК 771/772 (АВТОМАТИЧЕСКИЙ ПРОПУСК) ===
+-- === МОЩНЫЙ ОБРАБОТЧИК ОШИБОК ===
 task.spawn(function()
-    while task.wait(0.5) do
+    while true do
+        task.wait(1)
         pcall(function()
             local prompt = CoreGui:FindFirstChild("RobloxPromptGui")
             if prompt then
                 local overlay = prompt:FindFirstChild("promptOverlay")
-                if overlay then
-                    local errorPrompt = overlay:FindFirstChild("ErrorPrompt")
-                    -- Если мы видим ошибку (как на твоем скрине)
-                    if errorPrompt and errorPrompt.Visible then
-                            errorPrompt.Visible = false -- Прячем это окно
-                        HopDebounce = false         -- Сбрасываем блокировку хопа
-                    end
+                local errorPrompt = overlay and overlay:FindFirstChild("ErrorPrompt")
+                if errorPrompt and errorPrompt.Visible then
+                    errorPrompt.Visible = false 
+                    HopDebounce = false
+                    task.wait(0.5)
+                    RandomServerHop()
                 end
             end
         end)
@@ -551,15 +611,14 @@ end)
 
 -- Дублирующий обработчик на случай сбоя API телепорта
 TeleportService.TeleportInitFailed:Connect(function()
-    warn("Teleport failed")
-    task.wait(5)
     HopDebounce = false
+    RandomServerHop()
 end)
 
 -- === ЛОГИКА АВТОХОПА (ЖДЕТ 5 СЕК) ===
 task.spawn(function()
     if not game:IsLoaded() then game.Loaded:Wait() end
-    task.wait(9) -- Ждем 5 секунд после прогрузки
+    task.wait(5) -- Ждем 5 секунд после прогрузки
     
     if Settings.AutoHop and not FoundRarePet then
         AutoHopBtn.Text = "⏳ Hopping..."
