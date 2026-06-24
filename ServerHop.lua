@@ -9,6 +9,7 @@ local function RunScript()
     local Stats = game:GetService("Stats")
 
     local LocalPlayer = Players.LocalPlayer
+    local Camera = workspace.CurrentCamera
     local PlaceId = game.PlaceId
     local JobId = game.JobId
 
@@ -28,8 +29,11 @@ local function RunScript()
         Raccoon = true,
         Dragonfly = true,
         Bee = true,
-        Bear = true
+        Bear = true,
+        -- Owl = true -- Раскомментируй, если сова тоже нужна
     }
+
+    local Tracers = {} -- Таблица для линий (ESP)
 
     -- === АВТОМАТИЧЕСКИЙ АНТИ-ЛАГ (Очистка Gardens) ===
     task.spawn(function()
@@ -38,29 +42,19 @@ local function RunScript()
             if not gardens then return end
 
             local function CleanPlot(plot)
-                -- Удаляем всё, что уже успело загрузиться внутри Plot
                 for _, item in ipairs(plot:GetChildren()) do
                     pcall(function() item:Destroy() end)
                 end
-                
-                -- Уничтожаем всё новое, что игра попытается туда загрузить
                 plot.ChildAdded:Connect(function(item)
                     pcall(function() item:Destroy() end)
                 end)
             end
 
-            -- Обрабатываем текущие плоты
-            for _, plot in ipairs(gardens:GetChildren()) do
-                CleanPlot(plot)
-            end
-
-            -- Если игра динамически создает новые папки Plot
+            for _, plot in ipairs(gardens:GetChildren()) do CleanPlot(plot) end
             gardens.ChildAdded:Connect(function(plot)
-                task.wait()
-                CleanPlot(plot)
+                task.wait() CleanPlot(plot)
             end)
         end
-
         pcall(SetupAntiLag)
     end)
 
@@ -113,7 +107,6 @@ local function RunScript()
     Main.ClipsDescendants = true
     Instance.new("UICorner", Main).CornerRadius = UDim.new(0, 10)
 
-    -- ШАПКА
     local TopBar = Instance.new("Frame")
     TopBar.Parent = Main
     TopBar.Size = UDim2.new(1, 0, 0, 30)
@@ -141,14 +134,12 @@ local function RunScript()
     Minimize.BackgroundColor3 = Color3.fromRGB(55, 55, 60)
     Instance.new("UICorner", Minimize).CornerRadius = UDim.new(0, 6)
 
-    -- КОНТЕЙНЕР ДЛЯ СКРЫТИЯ
     local Content = Instance.new("Frame")
     Content.Parent = Main
     Content.Size = UDim2.new(1, 0, 1, -30)
     Content.Position = UDim2.new(0, 0, 0, 30)
     Content.BackgroundTransparency = 1
 
-    -- СТАТИСТИКА
     local FPSLabel = Instance.new("TextLabel")
     FPSLabel.Parent = Content
     FPSLabel.Position = UDim2.new(0, 10, 0, 0)
@@ -166,7 +157,6 @@ local function RunScript()
     local RamLabel = FPSLabel:Clone() RamLabel.Parent = Content RamLabel.Position = UDim2.new(0,10,0,100)
     local ServerTimeLabel = FPSLabel:Clone() ServerTimeLabel.Parent = Content ServerTimeLabel.Position = UDim2.new(0,10,0,120)
 
-    -- КНОПКИ
     local function CreateButton(text, yPos)
         local Button = Instance.new("TextButton")
         Button.Parent = Content
@@ -179,7 +169,6 @@ local function RunScript()
         Button.TextSize = 12
         Button.Text = text
         Instance.new("UICorner", Button).CornerRadius = UDim.new(0, 8)
-
         Button.MouseEnter:Connect(function() TweenService:Create(Button, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(70, 70, 75)}):Play() end)
         Button.MouseLeave:Connect(function() TweenService:Create(Button, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(50, 50, 55)}):Play() end)
         return Button
@@ -190,7 +179,6 @@ local function RunScript()
     local RejoinButton = CreateButton("↻ Rejoin", 211)
     local ListButton = CreateButton("📜 Server List", 244)
 
-    -- РАЗДЕЛ ПЕТОВ
     local PetsHeader = Instance.new("TextLabel")
     PetsHeader.Parent = Content
     PetsHeader.Position = UDim2.new(0, 10, 0, 280)
@@ -214,7 +202,6 @@ local function RunScript()
     PetListLayout.Padding = UDim.new(0, 4)
     PetListLayout.SortOrder = Enum.SortOrder.LayoutOrder
 
-    -- БОКОВАЯ ПАНЕЛЬ СЕРВЕРОВ
     local ListFrame = Instance.new("Frame")
     ListFrame.Parent = Main
     ListFrame.Size = UDim2.new(0, 190, 1, 0)
@@ -243,7 +230,6 @@ local function RunScript()
     ServerListLayout.Parent = ServerScroll
     ServerListLayout.Padding = UDim.new(0, 4)
 
-    -- DRAG (Перетаскивание)
     local Dragging, DragInput, DragStart, StartPos
     TopBar.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 then
@@ -263,13 +249,37 @@ local function RunScript()
         end
     end)
 
-    -- ОБНОВЛЕНИЕ СТАТИСТИКИ
+    -- === ОБНОВЛЕНИЕ ESP ЛИНИЙ И СТАТИСТИКИ ===
     local Frames, LastUpdate = 0, tick()
     RunService.RenderStepped:Connect(function()
+        -- FPS Counter
         Frames += 1
         if tick() - LastUpdate >= 1 then
             if Main.Visible then FPSLabel.Text = "FPS: " .. Frames end
             Frames, LastUpdate = 0, tick()
+        end
+
+        -- Обновление линий к петам
+        if Drawing then
+            for pet, line in pairs(Tracers) do
+                if pet and pet.Parent and (pet:FindFirstChildWhichIsA("BasePart", true) or pet.PrimaryPart) then
+                    local part = pet:FindFirstChildWhichIsA("BasePart", true) or pet.PrimaryPart
+                    local vector, onScreen = Camera:WorldToViewportPoint(part.Position)
+                    
+                    if onScreen then
+                        -- Рисуем линию от нижнего центра экрана к пету
+                        line.From = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
+                        line.To = Vector2.new(vector.X, vector.Y)
+                        line.Visible = true
+                    else
+                        line.Visible = false
+                    end
+                else
+                    line.Visible = false
+                    line:Remove()
+                    Tracers[pet] = nil
+                end
+            end
         end
     end)
 
@@ -291,7 +301,7 @@ local function RunScript()
         end
     end)
 
-    -- РАДАР ПЕТОВ
+    -- === РАДАР ПЕТОВ ===
     local function PopulatePetList()
         for _, child in ipairs(PetScrollFrame:GetChildren()) do
             if child:IsA("Frame") then child:Destroy() end
@@ -307,7 +317,8 @@ local function RunScript()
                 local matchedName = nil
                 
                 for wantedName in pairs(WantedPets) do
-                    if petNameLower:find(wantedName:lower()) then
+                    -- ИСПРАВЛЕНИЕ: Ищем строго формат "wildpet_ИМЯ_", чтобы игнорировать случайные слова в UUID (например bee2)
+                    if petNameLower:find("wildpet_" .. wantedName:lower() .. "_") then
                         matchedName = wantedName
                         break
                     end
@@ -316,6 +327,17 @@ local function RunScript()
                 if matchedName then
                     FoundAny = true
                     
+                    -- Создаем линию ESP, если её еще нет
+                    if not Tracers[petModel] and Drawing then
+                        local line = Drawing.new("Line")
+                        line.Visible = false
+                        line.Color = Color3.fromRGB(100, 255, 100) -- Зеленая линия
+                        line.Thickness = 1.5
+                        line.Transparency = 1
+                        Tracers[petModel] = line
+                    end
+
+                    -- UI Элемент
                     local ItemFrame = Instance.new("Frame")
                     ItemFrame.Parent = PetScrollFrame
                     ItemFrame.Size = UDim2.new(1, -4, 0, 26)
@@ -379,12 +401,20 @@ local function RunScript()
         local WildPetSpawns = MapFolder and MapFolder:WaitForChild("WildPetSpawns", 10)
         if WildPetSpawns then
             WildPetSpawns.ChildAdded:Connect(function() task.wait(0.3) PopulatePetList() end)
-            WildPetSpawns.ChildRemoved:Connect(function() task.wait(0.3) PopulatePetList() end)
+            -- Удаляем линию при исчезновении пета
+            WildPetSpawns.ChildRemoved:Connect(function(child) 
+                if Tracers[child] then
+                    Tracers[child]:Remove()
+                    Tracers[child] = nil
+                end
+                task.wait(0.3) 
+                PopulatePetList() 
+            end)
         end
     end)
     PopulatePetList()
 
-    -- СИСТЕМА КЭШИРОВАНИЯ СЕРВЕРОВ
+    -- === СИСТЕМА КЭШИРОВАНИЯ СЕРВЕРОВ ===
     local function FetchAllServers()
         local Servers = {}
         if Request then
