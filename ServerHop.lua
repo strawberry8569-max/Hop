@@ -548,10 +548,11 @@ task.spawn(function()
 end)
 
 -- Дублирующий обработчик на случай сбоя API телепорта
---TeleportService.TeleportInitFailed:Connect(function()
---    HopDebounce = false
-  --  RandomServerHop()
---end)
+TeleportService.TeleportInitFailed:Connect(function()
+    warn("Teleport failed")
+    task.wait(5)
+    HopDebounce = false
+end)
 
 -- === ЛОГИКА АВТОХОПА (ЖДЕТ 5 СЕК) ===
 task.spawn(function()
