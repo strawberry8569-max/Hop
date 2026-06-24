@@ -1,15 +1,14 @@
--- === ОБЪЯВЛЕНИЕ СЕРВИСОВ ===
+local function RunScript()
 local Players = game:GetService("Players")
+local TeleportService = game:GetService("TeleportService")
 local HttpService = game:GetService("HttpService")
+local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
-local TeleportService = game:GetService("TeleportService")
-local UserInputService = game:GetService("UserInputService")
-local CoreGui = game:GetService("CoreGui")
-local Stats = game:GetService("Stats")
 local VirtualUser = game:GetService("VirtualUser")
+local Stats = game:GetService("Stats")
+local CoreGui = game:GetService("CoreGui")
 
--- === ПЕРЕМЕННЫЕ ===
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 local PlaceId = game.PlaceId
@@ -56,11 +55,12 @@ local WantedPets = {
     Dragonfly = true,
     Bee = true,
     Bear = true,
+    -- Owl = true
 }
 
 local Tracers = {} 
 
--- === АВТОМАТИЧЕСКИЙ АНТИ-ЛАГ ===
+-- === АВТОМАТИЧЕСКИЙ АНТИ-ЛАГ (Очистка Gardens) ===
 task.spawn(function()
     local function SetupAntiLag()
         local gardens = workspace:WaitForChild("Gardens", 10)
@@ -94,7 +94,7 @@ local function QueueNextTeleport()
     end
 end
 
--- Анти-АФК
+-- Anti-AFK
 LocalPlayer.Idled:Connect(function()
     pcall(function() VirtualUser:CaptureController(); VirtualUser:ClickButton2(Vector2.new()) end)
 end)
@@ -110,7 +110,7 @@ local Main = Instance.new("Frame")
 Main.Parent = Gui
 Main.Size = UDim2.new(0, 200, 0, 430)
 Main.Position = UDim2.new(1, -220, 0, 40)
-Main.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+Main.BackgroundColor3 = Color3.fromRGB(30, 30, 35, 255)
 Main.BorderSizePixel = 0
 Main.ClipsDescendants = true
 Instance.new("UICorner", Main).CornerRadius = UDim.new(0, 10)
@@ -142,6 +142,7 @@ Minimize.TextColor3 = Color3.new(1, 1, 1)
 Minimize.BackgroundColor3 = Color3.fromRGB(55, 55, 60)
 Instance.new("UICorner", Minimize).CornerRadius = UDim.new(0, 6)
 
+-- Контейнер с автоматической сортировкой
 local Content = Instance.new("Frame")
 Content.Parent = Main
 Content.Size = UDim2.new(1, 0, 1, -30)
@@ -154,6 +155,7 @@ ContentLayout.SortOrder = Enum.SortOrder.LayoutOrder
 ContentLayout.Padding = UDim.new(0, 5)
 ContentLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 
+-- === БЛОК СТАТИСТИКИ (FPS, PING, PLAYERS) ===
 local StatsFrame = Instance.new("Frame")
 StatsFrame.Parent = Content
 StatsFrame.Size = UDim2.new(1, -20, 0, 55)
@@ -177,6 +179,7 @@ local PlayersLabel = FPSLabel:Clone()
 PlayersLabel.Parent = StatsFrame
 PlayersLabel.Position = UDim2.new(0, 0, 0, 36)
 
+-- === ЗАГОЛОВОК ПЕТОВ ===
 local PetsHeader = Instance.new("TextLabel")
 PetsHeader.Parent = Content
 PetsHeader.Size = UDim2.new(1, -20, 0, 20)
@@ -188,6 +191,7 @@ PetsHeader.TextSize = 13
 PetsHeader.TextXAlignment = Enum.TextXAlignment.Left
 PetsHeader.LayoutOrder = 2
 
+-- === СПИСОК ПЕТОВ ===
 local PetScrollFrame = Instance.new("ScrollingFrame")
 PetScrollFrame.Parent = Content
 PetScrollFrame.Size = UDim2.new(1, -20, 0, 100)
@@ -200,6 +204,7 @@ local PetListLayout = Instance.new("UIListLayout")
 PetListLayout.Parent = PetScrollFrame
 PetListLayout.Padding = UDim.new(0, 4)
 
+-- === КНОПКИ ===
 local function CreateButton(text, order)
     local Button = Instance.new("TextButton")
     Button.Parent = Content
@@ -212,12 +217,9 @@ local function CreateButton(text, order)
     Button.Text = text
     Button.LayoutOrder = order
     Instance.new("UICorner", Button).CornerRadius = UDim.new(0, 8)
-    
-    Button.MouseEnter:Connect(function() 
-        TweenService:Create(Button, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(70, 70, 75)}):Play() 
-    end)
+    Button.MouseEnter:Connect(function() TweenService:Create(Button, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(70, 70, 75)}):Play() end)
     Button.MouseLeave:Connect(function() 
-        if not Button.Name:find("Active") then
+        if Button.Name ~= "ActiveAutoHop" then
             TweenService:Create(Button, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(50, 50, 55)}):Play() 
         end
     end)
@@ -228,6 +230,7 @@ local AutoHopBtn = CreateButton("🚀 Auto Hop: OFF", 4)
 local ServerHopButton = CreateButton("🔄 Server Hop", 5)
 local LowPlayerButton = CreateButton("👥 Low Player Hop", 6)
 local RejoinButton = CreateButton("↻ Rejoin", 7)
+local ListButton = CreateButton("📜 Server List", 8)
 
 local function UpdateAutoHopVisual()
     AutoHopBtn.Text = Settings.AutoHop and "🚀 Auto Hop: ON" or "🚀 Auto Hop: OFF"
@@ -241,6 +244,35 @@ AutoHopBtn.MouseButton1Click:Connect(function()
     UpdateAutoHopVisual()
     SaveSettings()
 end)
+
+-- === ЛИСТ КЕШИРОВАННЫХ СЕРВЕРОВ ===
+local ListFrame = Instance.new("Frame")
+ListFrame.Parent = Main
+ListFrame.Size = UDim2.new(0, 190, 1, 0)
+ListFrame.Position = UDim2.new(0, -200, 0, 0)
+ListFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+ListFrame.Visible = false
+Instance.new("UICorner", ListFrame).CornerRadius = UDim.new(0, 10)
+
+local ListTitle = Instance.new("TextLabel")
+ListTitle.Parent = ListFrame
+ListTitle.Size = UDim2.new(1, 0, 0, 30)
+ListTitle.BackgroundTransparency = 1
+ListTitle.Text = "Cached Servers"
+ListTitle.TextColor3 = Color3.new(1, 1, 1)
+ListTitle.Font = Enum.Font.GothamBold
+ListTitle.TextSize = 13
+
+local ServerScroll = Instance.new("ScrollingFrame")
+ServerScroll.Parent = ListFrame
+ServerScroll.Size = UDim2.new(1, -10, 1, -40)
+ServerScroll.Position = UDim2.new(0, 5, 0, 35)
+ServerScroll.BackgroundTransparency = 1
+ServerScroll.ScrollBarThickness = 3
+ServerScroll.BorderSizePixel = 0
+local ServerListLayout = Instance.new("UIListLayout")
+ServerListLayout.Parent = ServerScroll
+ServerListLayout.Padding = UDim.new(0, 4)
 
 -- Перемещение окна
 local Dragging, DragInput, DragStart, StartPos
@@ -260,7 +292,7 @@ UserInputService.InputChanged:Connect(function(input)
     end
 end)
 
--- Обновление ESP и стат
+-- === ОБНОВЛЕНИЕ ESP ЛИНИЙ И FPS/PING ===
 local Frames, LastUpdate = 0, tick()
 RunService.RenderStepped:Connect(function()
     Frames += 1
@@ -291,69 +323,136 @@ RunService.RenderStepped:Connect(function()
 end)
 
 task.spawn(function()
-    while task.wait(1) do
+    while true do
         pcall(function()
-            if Main.Visible then
+            if Main.Visible and Content.Visible then
                 local Ping = math.floor(Stats.Network.ServerStatsItem["Data Ping"]:GetValue())
                 PingLabel.Text = "Ping: " .. Ping .. " ms"
                 PlayersLabel.Text = "Players: " .. #Players:GetPlayers() .. " / " .. Players.MaxPlayers
             end
         end)
+        task.wait(1)
     end
 end)
 
--- Радар петов
+-- === РАДАР ПЕТОВ (БЕЗ ТП) ===
 local function PopulatePetList()
     for _, child in ipairs(PetScrollFrame:GetChildren()) do
         if child:IsA("TextLabel") then child:Destroy() end
     end
+
     local MapFolder = workspace:FindFirstChild("Map")
     local WildPetSpawns = MapFolder and MapFolder:FindFirstChild("WildPetSpawns")
     local HasPets = false
+
     if WildPetSpawns then
         for _, petModel in ipairs(WildPetSpawns:GetChildren()) do
+            local petNameLower = petModel.Name:lower()
             local matchedName = nil
+            
             for wantedName in pairs(WantedPets) do
-                if petModel.Name:lower():find(wantedName:lower()) then
-                    matchedName = wantedName; break
+                if petNameLower:find("wildpet_" .. wantedName:lower() .. "_") then
+                    matchedName = wantedName
+                    break
                 end
             end
+
             if matchedName then
                 HasPets = true
                 if not Tracers[petModel] and Drawing then
                     local line = Drawing.new("Line")
-                    line.Visible = false; line.Color = Color3.fromRGB(100, 255, 100); line.Thickness = 1.5; line.Transparency = 1
+                    line.Visible = false
+                    line.Color = Color3.fromRGB(100, 255, 100)
+                    line.Thickness = 1.5
+                    line.Transparency = 1
                     Tracers[petModel] = line
                 end
-                local NameLabel = Instance.new("TextLabel", PetScrollFrame)
-                NameLabel.Size = UDim2.new(1, 0, 0, 20); NameLabel.BackgroundTransparency = 1; NameLabel.Text = "• " .. matchedName
-                NameLabel.TextColor3 = Color3.new(1, 1, 1); NameLabel.Font = Enum.Font.Gotham; NameLabel.TextSize = 13; NameLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+                -- Просто отображаем имя пета (без кнопки)
+                local NameLabel = Instance.new("TextLabel")
+                NameLabel.Parent = PetScrollFrame
+                NameLabel.Size = UDim2.new(1, 0, 0, 20)
+                NameLabel.BackgroundTransparency = 1
+                NameLabel.Text = "• " .. matchedName
+                NameLabel.TextColor3 = Color3.new(1, 1, 1)
+                NameLabel.Font = Enum.Font.Gotham
+                NameLabel.TextSize = 13
+                NameLabel.TextXAlignment = Enum.TextXAlignment.Left
             end
         end
     end
+
     FoundRarePet = HasPets
+
+    if not HasPets then
+        local EmptyLabel = Instance.new("TextLabel")
+        EmptyLabel.Parent = PetScrollFrame
+        EmptyLabel.Size = UDim2.new(1, 0, 0, 20)
+        EmptyLabel.BackgroundTransparency = 1
+        EmptyLabel.Text = "No rare pets found..."
+        EmptyLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
+        EmptyLabel.Font = Enum.Font.Gotham
+        EmptyLabel.TextSize = 11
+        EmptyLabel.TextXAlignment = Enum.TextXAlignment.Left
+    end
+
     PetScrollFrame.CanvasSize = UDim2.new(0, 0, 0, PetListLayout.AbsoluteContentSize.Y + 5)
 end
 
 task.spawn(function()
-    local WildPetSpawns = workspace:WaitForChild("Map", 10):WaitForChild("WildPetSpawns", 10)
+    local MapFolder = workspace:WaitForChild("Map", 10)
+    local WildPetSpawns = MapFolder and MapFolder:WaitForChild("WildPetSpawns", 10)
     if WildPetSpawns then
         WildPetSpawns.ChildAdded:Connect(function() task.wait(0.3) PopulatePetList() end)
         WildPetSpawns.ChildRemoved:Connect(function(child) 
             if Tracers[child] then Tracers[child]:Remove(); Tracers[child] = nil end
-            task.wait(0.3) PopulatePetList() 
+            task.wait(0.3) 
+            PopulatePetList() 
         end)
     end
 end)
 PopulatePetList()
 
--- Хоп-система
+-- === СИСТЕМА КЭШИРОВАНИЯ СЕРВЕРОВ И ХОПОВ ===
 local function FetchAllServers()
     local Servers = {}
-    local res = (Request and Request({Url = "https://games.roblox.com/v1/games/" .. PlaceId .. "/servers/Public?sortOrder=Asc&limit=100", Method = "GET"}).Body) or game:HttpGet("https://games.roblox.com/v1/games/" .. PlaceId .. "/servers/Public?sortOrder=Asc&limit=100")
-    local Data = HttpService:JSONDecode(res)
-    for _, Server in ipairs(Data.data) do table.insert(Servers, Server) end
+    if Request then
+        pcall(function()
+            local Cursor = ""
+            repeat
+                local URL = "https://games.roblox.com/v1/games/" .. PlaceId .. "/servers/Public?sortOrder=Asc&limit=100"
+                if Cursor ~= "" then URL = URL .. "&cursor=" .. Cursor end
+                local Response = Request({ Url = URL, Method = "GET" })
+                local Data = HttpService:JSONDecode(Response.Body)
+                for _, Server in ipairs(Data.data) do table.insert(Servers, Server) end
+                Cursor = Data.nextPageCursor or ""
+            until Cursor == ""
+        end)
+    else
+        pcall(function()
+            local res = game:HttpGet("https://games.roblox.com/v1/games/" .. PlaceId .. "/servers/Public?sortOrder=Asc&limit=100")
+            local Data = HttpService:JSONDecode(res)
+            for _, Server in ipairs(Data.data) do table.insert(Servers, Server) end
+        end)
+    end
     return Servers
+end
+
+local function GetCachedServers()
+    if isfile and readfile and writefile then
+        if isfile(CacheFileName) then
+            local success, data = pcall(function() return HttpService:JSONDecode(readfile(CacheFileName)) end)
+            if success and type(data) == "table" and #data > 0 then return data end
+        end
+        local newServers = FetchAllServers()
+        pcall(function() writefile(CacheFileName, HttpService:JSONEncode(newServers)) end)
+        return newServers
+    end
+    return FetchAllServers()
+end
+
+local function UpdateCacheFile(serversList)
+    if writefile then pcall(function() writefile(CacheFileName, HttpService:JSONEncode(serversList)) end) end
 end
 
 local HopDebounce = false
@@ -362,34 +461,122 @@ RandomServerHop = function()
     HopDebounce = true
     ServerHopButton.Text = "⚡ Hopping..."
     pcall(function()
-        local Servers = FetchAllServers()
-        for _, Server in ipairs(Servers) do
+        local Servers = GetCachedServers()
+        local ValidIndices = {}
+        for i, Server in ipairs(Servers) do
             if Server.id ~= JobId and Server.playing < Server.maxPlayers and not IsRecent(Server.id) then
-                AddRecentServer(Server.id); QueueNextTeleport()
-                TeleportService:TeleportToPlaceInstance(PlaceId, Server.id, LocalPlayer)
-                break
+                table.insert(ValidIndices, i)
             end
         end
+        if #ValidIndices > 0 then
+            local RandomIdx = ValidIndices[math.random(1, #ValidIndices)]
+            local SelectedServer = Servers[RandomIdx]
+            table.remove(Servers, RandomIdx)
+            UpdateCacheFile(Servers)
+            AddRecentServer(SelectedServer.id)
+            QueueNextTeleport()
+            TeleportService:TeleportToPlaceInstance(PlaceId, SelectedServer.id, LocalPlayer)
+        else
+            if writefile then pcall(function() writefile(CacheFileName, "[]") end) end
+            ServerHopButton.Text = "🔄 Fetching New..."
+            task.wait(0.5)
+            HopDebounce = false
+            RandomServerHop()
+            return
+        end
     end)
+    
+    -- Тайм-аут на случай если роблокс просто завис и ничего не делает
     task.delay(10, function() HopDebounce = false; ServerHopButton.Text = "🔄 Server Hop" end)
 end
 
+local function LowPlayerHop()
+    if HopDebounce then return end
+    HopDebounce = true
+    LowPlayerButton.Text = "⚡ Hopping..."
+    pcall(function()
+        local Servers = GetCachedServers()
+        local BestIndex, MinPlayers = -1, math.huge
+        for i, Server in ipairs(Servers) do
+            if Server.id ~= JobId and Server.playing < Server.maxPlayers and not IsRecent(Server.id) then
+                if Server.playing < MinPlayers then MinPlayers, BestIndex = Server.playing, i end
+            end
+        end
+        if BestIndex ~= -1 then
+            local SelectedServer = Servers[BestIndex]
+            table.remove(Servers, BestIndex)
+            UpdateCacheFile(Servers)
+            AddRecentServer(SelectedServer.id)
+            QueueNextTeleport()
+            TeleportService:TeleportToPlaceInstance(PlaceId, SelectedServer.id, LocalPlayer)
+        else
+            if writefile then pcall(function() writefile(CacheFileName, "[]") end) end
+            LowPlayerButton.Text = "👥 Fetching New..."
+            task.wait(0.5)
+            HopDebounce = false
+            LowPlayerHop()
+            return
+        end
+    end)
+    task.delay(10, function() HopDebounce = false; LowPlayerButton.Text = "👥 Low Player Hop" end)
+end
+
 ServerHopButton.MouseButton1Click:Connect(RandomServerHop)
+LowPlayerButton.MouseButton1Click:Connect(LowPlayerHop)
 RejoinButton.MouseButton1Click:Connect(function() QueueNextTeleport(); TeleportService:TeleportToPlaceInstance(PlaceId, JobId, LocalPlayer) end)
 
--- Сворачивание
+ListButton.MouseButton1Click:Connect(function() ListFrame.Visible = not ListFrame.Visible end)
+
+-- === МОЩНЫЙ ОБРАБОТЧИК ОШИБОК 771/772 (АВТОМАТИЧЕСКИЙ ПРОПУСК) ===
+task.spawn(function()
+    while task.wait(0.5) do
+        pcall(function()
+            local prompt = CoreGui:FindFirstChild("RobloxPromptGui")
+            if prompt then
+                local overlay = prompt:FindFirstChild("promptOverlay")
+                if overlay then
+                    local errorPrompt = overlay:FindFirstChild("ErrorPrompt")
+                    -- Если мы видим ошибку (как на твоем скрине)
+                    if errorPrompt and errorPrompt.Visible then
+                        errorPrompt.Visible = false -- Прячем это окно
+                        HopDebounce = false         -- Сбрасываем блокировку хопа
+                        RandomServerHop()           -- Сразу хопаемся на другой сервер
+                    end
+                end
+            end
+        end)
+    end
+end)
+
+-- Дублирующий обработчик на случай сбоя API телепорта
+TeleportService.TeleportInitFailed:Connect(function()
+    HopDebounce = false
+    RandomServerHop()
+end)
+
+-- === ЛОГИКА АВТОХОПА (ЖДЕТ 5 СЕК) ===
+task.spawn(function()
+    if not game:IsLoaded() then game.Loaded:Wait() end
+    task.wait(5) -- Ждем 5 секунд после прогрузки
+    
+    if Settings.AutoHop and not FoundRarePet then
+        AutoHopBtn.Text = "⏳ Hopping..."
+        RandomServerHop()
+    end
+end)
+
+-- СВОРАЧИВАНИЕ GUI
 local Minimized = false
 Minimize.MouseButton1Click:Connect(function()
     Minimized = not Minimized
     Content.Visible = not Minimized
+    if Minimized then ListFrame.Visible = false end
     local TargetSize = Minimized and UDim2.new(0, 200, 0, 30) or UDim2.new(0, 200, 0, 430)
-    TweenService:Create(Main, TweenInfo.new(0.25), { Size = TargetSize }):Play()
+    TweenService:Create(Main, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Size = TargetSize }):Play()
 end)
 
--- Автохоп при входе
-task.spawn(function()
-    task.wait(5)
-    if Settings.AutoHop and not FoundRarePet then RandomServerHop() end
-end)
+print("UI Fixed, Anti-Error Loop Active, TP Removed!")
 
-print("Script Fixed and Loaded!")
+end
+
+RunScript()
