@@ -60,17 +60,50 @@ local WantedPets = {
 
 local Tracers = {} 
 
--- === АВТОМАТИЧЕСКИЙ АНТИ-ЛАГ (Очистка Gardens) ===
+-- === БЕЗОПАСНЫЙ АВТОМАТИЧЕСКИЙ АНТИ-ЛАГ ===
 task.spawn(function()
+    -- Функция для скрытия графических элементов без их удаления
+    local function OptimizeInstance(instance)
+        pcall(function()
+            if instance:IsA("BasePart") or instance:IsA("MeshPart") then
+                instance.Transparency = 1
+                instance.CastShadow = false
+                instance.Material = Enum.Material.SmoothPlastic
+            elseif instance:IsA("Decal") or instance:IsA("Texture") then
+                instance.Transparency = 1
+            elseif instance:IsA("ParticleEmitter") or instance:IsA("Beam") or instance:IsA("Trail") then
+                instance.Enabled = false
+            elseif instance:IsA("PointLight") or instance:IsA("SpotLight") or instance:IsA("SurfaceLight") then
+                instance.Enabled = false
+            end
+        end)
+    end
+
     local function SetupAntiLag()
         local gardens = workspace:WaitForChild("Gardens", 10)
         if not gardens then return end
+        
         local function CleanPlot(plot)
-            for _, item in ipairs(plot:GetChildren()) do pcall(function() item:Destroy() end) end
-            plot.ChildAdded:Connect(function(item) pcall(function() item:Destroy() end) end)
+            -- Оптимизируем все текущие элементы в плотах (рекурсивно)
+            for _, item in ipairs(plot:GetDescendants()) do
+                OptimizeInstance(item)
+            end
+            
+            -- Оптимизируем новые элементы, которые появляются в процессе игры (например, выросшие растения)
+            plot.DescendantAdded:Connect(function(item)
+                task.wait() -- Небольшая задержка для загрузки свойств объекта
+                OptimizeInstance(item)
+            end)
         end
-        for _, plot in ipairs(gardens:GetChildren()) do CleanPlot(plot) end
-        gardens.ChildAdded:Connect(function(plot) task.wait() CleanPlot(plot) end)
+        
+        for _, plot in ipairs(gardens:GetChildren()) do 
+            CleanPlot(plot) 
+        end
+        
+        gardens.ChildAdded:Connect(function(plot) 
+            task.wait() 
+            CleanPlot(plot) 
+        end)
     end
     pcall(SetupAntiLag)
 end)
@@ -335,7 +368,7 @@ task.spawn(function()
     end
 end)
 
--- === РАДАР ПЕТОВ (БЕЗ ТП) ===
+-- === РАДАР ПЕТОВ ===
 local function PopulatePetList()
     for _, child in ipairs(PetScrollFrame:GetChildren()) do
         if child:IsA("TextLabel") then child:Destroy() end
@@ -368,7 +401,6 @@ local function PopulatePetList()
                     Tracers[petModel] = line
                 end
 
-                -- Просто отображаем имя пета (без кнопки)
                 local NameLabel = Instance.new("TextLabel")
                 NameLabel.Parent = PetScrollFrame
                 NameLabel.Size = UDim2.new(1, 0, 0, 20)
@@ -486,7 +518,6 @@ RandomServerHop = function()
         end
     end)
     
-    -- Тайм-аут на случай если роблокс просто завис и ничего не делает
     task.delay(10, function() HopDebounce = false; ServerHopButton.Text = "🔄 Server Hop" end)
 end
 
@@ -527,7 +558,7 @@ RejoinButton.MouseButton1Click:Connect(function() QueueNextTeleport(); TeleportS
 
 ListButton.MouseButton1Click:Connect(function() ListFrame.Visible = not ListFrame.Visible end)
 
--- === МОЩНЫЙ ОБРАБОТЧИК ОШИБОК 771/772 (АВТОМАТИЧЕСКИЙ ПРОПУСК) ===
+-- === ОБРАБОТЧИК ОШИБОК 771/772 ===
 task.spawn(function()
     while task.wait(0.5) do
         pcall(function()
@@ -536,11 +567,10 @@ task.spawn(function()
                 local overlay = prompt:FindFirstChild("promptOverlay")
                 if overlay then
                     local errorPrompt = overlay:FindFirstChild("ErrorPrompt")
-                    -- Если мы видим ошибку (как на твоем скрине)
                     if errorPrompt and errorPrompt.Visible then
-                        errorPrompt.Visible = false -- Прячем это окно
-                        HopDebounce = false         -- Сбрасываем блокировку хопа
-                        RandomServerHop()           -- Сразу хопаемся на другой сервер
+                        errorPrompt.Visible = false
+                        HopDebounce = false
+                        RandomServerHop()
                     end
                 end
             end
@@ -554,10 +584,10 @@ TeleportService.TeleportInitFailed:Connect(function()
     RandomServerHop()
 end)
 
--- === ЛОГИКА АВТОХОПА (ЖДЕТ 5 СЕК) ===
+-- === ЛОГИКА АВТОХОПА ===
 task.spawn(function()
     if not game:IsLoaded() then game.Loaded:Wait() end
-    task.wait(5) -- Ждем 5 секунд после прогрузки
+    task.wait(5)
     
     if Settings.AutoHop and not FoundRarePet then
         AutoHopBtn.Text = "⏳ Hopping..."
@@ -575,7 +605,7 @@ Minimize.MouseButton1Click:Connect(function()
     TweenService:Create(Main, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Size = TargetSize }):Play()
 end)
 
-print("UI Fixed, Anti-Error Loop Active, TP Removed!")
+print("UI Fixed, Safe Anti-Lag Integrated, Errors Prevented!")
 
 end
 
