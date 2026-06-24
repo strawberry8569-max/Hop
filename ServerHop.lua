@@ -6,7 +6,6 @@ local function RunScript()
     local TweenService = game:GetService("TweenService")
     local RunService = game:GetService("RunService")
     local VirtualUser = game:GetService("VirtualUser")
-    local Stats = game:GetService("Stats")
 
     local LocalPlayer = Players.LocalPlayer
     local Camera = workspace.CurrentCamera
@@ -18,10 +17,36 @@ local function RunScript()
                     (typeof(http_request) == "function" and http_request) or 
                     (syn and syn.request) or nil
 
-    local StartTime = tick()
-    local HopCount = 0
-    local RecentServers = {}
+    local RecentServers = getgenv().RecentServers or {}
     local CacheFileName = "HopCache_" .. PlaceId .. ".json"
+    local SettingsFolder = "PetFinderSettings"
+    local SettingsFile = SettingsFolder .. "/Config.json"
+
+    local Settings = { AutoHop = false }
+    local FoundRarePet = false -- Глобальный флаг для автохопа
+    local RandomServerHop -- Объявляем заранее
+
+    -- === СОХРАНЕНИЕ И ЗАГРУЗКА НАСТРОЕК ===
+    local function SaveSettings()
+        if writefile then
+            pcall(function()
+                if isfolder and not isfolder(SettingsFolder) then makefolder(SettingsFolder) end
+                writefile(SettingsFile, HttpService:JSONEncode(Settings))
+            end)
+        end
+    end
+
+    local function LoadSettings()
+        if isfile and isfile(SettingsFile) then
+            local success, result = pcall(function()
+                return HttpService:JSONDecode(readfile(SettingsFile))
+            end)
+            if success and type(result) == "table" then
+                if result.AutoHop ~= nil then Settings.AutoHop = result.AutoHop end
+            end
+        end
+    end
+    LoadSettings()
 
     -- === СПИСОК РЕДКИХ ПЕТОВ ===
     local WantedPets = {
@@ -30,30 +55,22 @@ local function RunScript()
         Dragonfly = true,
         Bee = true,
         Bear = true,
-        -- Owl = true -- Раскомментируй, если сова тоже нужна
+        -- Owl = true
     }
 
-    local Tracers = {} -- Таблица для линий (ESP)
+    local Tracers = {} 
 
     -- === АВТОМАТИЧЕСКИЙ АНТИ-ЛАГ (Очистка Gardens) ===
     task.spawn(function()
         local function SetupAntiLag()
             local gardens = workspace:WaitForChild("Gardens", 10)
             if not gardens then return end
-
             local function CleanPlot(plot)
-                for _, item in ipairs(plot:GetChildren()) do
-                    pcall(function() item:Destroy() end)
-                end
-                plot.ChildAdded:Connect(function(item)
-                    pcall(function() item:Destroy() end)
-                end)
+                for _, item in ipairs(plot:GetChildren()) do pcall(function() item:Destroy() end) end
+                plot.ChildAdded:Connect(function(item) pcall(function() item:Destroy() end) end)
             end
-
             for _, plot in ipairs(gardens:GetChildren()) do CleanPlot(plot) end
-            gardens.ChildAdded:Connect(function(plot)
-                task.wait() CleanPlot(plot)
-            end)
+            gardens.ChildAdded:Connect(function(plot) task.wait() CleanPlot(plot) end)
         end
         pcall(SetupAntiLag)
     end)
@@ -63,23 +80,17 @@ local function RunScript()
         table.insert(RecentServers, 1, id)
         while #RecentServers > 20 do table.remove(RecentServers) end
     end
-
     AddRecentServer(JobId)
-    if getgenv().RecentServers then RecentServers = getgenv().RecentServers end
 
     local function IsRecent(id)
-        for _, v in ipairs(RecentServers) do
-            if v == id then return true end
-        end
+        for _, v in ipairs(RecentServers) do if v == id then return true end end
         return false
     end
 
     local function QueueNextTeleport()
         if queue_on_teleport then
             local data = HttpService:JSONEncode(RecentServers)
-            queue_on_teleport([[
-                getgenv().RecentServers = game:GetService("HttpService"):JSONDecode(']].. data ..[[')
-            ]])
+            queue_on_teleport([[ getgenv().RecentServers = game:GetService("HttpService"):JSONDecode(']].. data ..[[') ]])
         end
     end
 
@@ -100,7 +111,7 @@ local function RunScript()
 
     local Main = Instance.new("Frame")
     Main.Parent = Gui
-    Main.Size = UDim2.new(0, 200, 0, 480)
+    Main.Size = UDim2.new(0, 200, 0, 360)
     Main.Position = UDim2.new(1, -220, 0, 40)
     Main.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
     Main.BorderSizePixel = 0
@@ -117,7 +128,7 @@ local function RunScript()
     Title.Size = UDim2.new(1, -30, 1, 0)
     Title.Position = UDim2.new(0, 10, 0, 0)
     Title.BackgroundTransparency = 1
-    Title.Text = "Server Tools"
+    Title.Text = "Pet Finder"
     Title.TextColor3 = Color3.new(1, 1, 1)
     Title.Font = Enum.Font.GothamBold
     Title.TextSize = 14
@@ -140,23 +151,30 @@ local function RunScript()
     Content.Position = UDim2.new(0, 0, 0, 30)
     Content.BackgroundTransparency = 1
 
-    local FPSLabel = Instance.new("TextLabel")
-    FPSLabel.Parent = Content
-    FPSLabel.Position = UDim2.new(0, 10, 0, 0)
-    FPSLabel.Size = UDim2.new(1, -20, 0, 18)
-    FPSLabel.BackgroundTransparency = 1
-    FPSLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
-    FPSLabel.Font = Enum.Font.Gotham
-    FPSLabel.TextSize = 12
-    FPSLabel.TextXAlignment = Enum.TextXAlignment.Left
+    -- === ПЕТЫ В САМОМ ВЕРХУ ===
+    local PetsHeader = Instance.new("TextLabel")
+    PetsHeader.Parent = Content
+    PetsHeader.Position = UDim2.new(0, 10, 0, 5)
+    PetsHeader.Size = UDim2.new(1, -20, 0, 20)
+    PetsHeader.BackgroundTransparency = 1
+    PetsHeader.Text = "🐾 Rare Pets:"
+    PetsHeader.TextColor3 = Color3.fromRGB(150, 220, 150)
+    PetsHeader.Font = Enum.Font.GothamBold
+    PetsHeader.TextSize = 13
+    PetsHeader.TextXAlignment = Enum.TextXAlignment.Left
 
-    local PingLabel = FPSLabel:Clone() PingLabel.Parent = Content PingLabel.Position = UDim2.new(0,10,0,20)
-    local PlayersLabel = FPSLabel:Clone() PlayersLabel.Parent = Content PlayersLabel.Position = UDim2.new(0,10,0,40)
-    local RuntimeLabel = FPSLabel:Clone() RuntimeLabel.Parent = Content RuntimeLabel.Position = UDim2.new(0,10,0,60)
-    local HopsLabel = FPSLabel:Clone() HopsLabel.Parent = Content HopsLabel.Position = UDim2.new(0,10,0,80)
-    local RamLabel = FPSLabel:Clone() RamLabel.Parent = Content RamLabel.Position = UDim2.new(0,10,0,100)
-    local ServerTimeLabel = FPSLabel:Clone() ServerTimeLabel.Parent = Content ServerTimeLabel.Position = UDim2.new(0,10,0,120)
+    local PetScrollFrame = Instance.new("ScrollingFrame")
+    PetScrollFrame.Parent = Content
+    PetScrollFrame.Position = UDim2.new(0, 10, 0, 30)
+    PetScrollFrame.Size = UDim2.new(1, -20, 0, 110)
+    PetScrollFrame.BackgroundTransparency = 1
+    PetScrollFrame.ScrollBarThickness = 3
+    PetScrollFrame.BorderSizePixel = 0
+    local PetListLayout = Instance.new("UIListLayout")
+    PetListLayout.Parent = PetScrollFrame
+    PetListLayout.Padding = UDim.new(0, 4)
 
+    -- === КНОПКИ НИЖЕ ===
     local function CreateButton(text, yPos)
         local Button = Instance.new("TextButton")
         Button.Parent = Content
@@ -170,37 +188,33 @@ local function RunScript()
         Button.Text = text
         Instance.new("UICorner", Button).CornerRadius = UDim.new(0, 8)
         Button.MouseEnter:Connect(function() TweenService:Create(Button, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(70, 70, 75)}):Play() end)
-        Button.MouseLeave:Connect(function() TweenService:Create(Button, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(50, 50, 55)}):Play() end)
+        Button.MouseLeave:Connect(function() 
+            if Button.Name ~= "ActiveAutoHop" then
+                TweenService:Create(Button, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(50, 50, 55)}):Play() 
+            end
+        end)
         return Button
     end
 
-    local ServerHopButton = CreateButton("🔄 Server Hop", 145)
-    local LowPlayerButton = CreateButton("👥 Low Player Hop", 178)
-    local RejoinButton = CreateButton("↻ Rejoin", 211)
-    local ListButton = CreateButton("📜 Server List", 244)
+    local startY = 150
+    local AutoHopBtn = CreateButton("🚀 Auto Hop: OFF", startY)
+    local ServerHopButton = CreateButton("🔄 Server Hop", startY + 33)
+    local LowPlayerButton = CreateButton("👥 Low Player Hop", startY + 66)
+    local RejoinButton = CreateButton("↻ Rejoin", startY + 99)
+    local ListButton = CreateButton("📜 Server List", startY + 132)
 
-    local PetsHeader = Instance.new("TextLabel")
-    PetsHeader.Parent = Content
-    PetsHeader.Position = UDim2.new(0, 10, 0, 280)
-    PetsHeader.Size = UDim2.new(1, -20, 0, 20)
-    PetsHeader.BackgroundTransparency = 1
-    PetsHeader.Text = "🐾 Rare Pets:"
-    PetsHeader.TextColor3 = Color3.fromRGB(150, 220, 150)
-    PetsHeader.Font = Enum.Font.GothamBold
-    PetsHeader.TextSize = 13
-    PetsHeader.TextXAlignment = Enum.TextXAlignment.Left
+    local function UpdateAutoHopVisual()
+        AutoHopBtn.Text = Settings.AutoHop and "🚀 Auto Hop: ON" or "🚀 Auto Hop: OFF"
+        AutoHopBtn.BackgroundColor3 = Settings.AutoHop and Color3.fromRGB(60, 140, 60) or Color3.fromRGB(50, 50, 55)
+        AutoHopBtn.Name = Settings.AutoHop and "ActiveAutoHop" or "AutoHop"
+    end
+    UpdateAutoHopVisual()
 
-    local PetScrollFrame = Instance.new("ScrollingFrame")
-    PetScrollFrame.Parent = Content
-    PetScrollFrame.Position = UDim2.new(0, 10, 0, 305)
-    PetScrollFrame.Size = UDim2.new(1, -20, 1, -315)
-    PetScrollFrame.BackgroundTransparency = 1
-    PetScrollFrame.ScrollBarThickness = 3
-    PetScrollFrame.BorderSizePixel = 0
-    local PetListLayout = Instance.new("UIListLayout")
-    PetListLayout.Parent = PetScrollFrame
-    PetListLayout.Padding = UDim.new(0, 4)
-    PetListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    AutoHopBtn.MouseButton1Click:Connect(function()
+        Settings.AutoHop = not Settings.AutoHop
+        UpdateAutoHopVisual()
+        SaveSettings()
+    end)
 
     local ListFrame = Instance.new("Frame")
     ListFrame.Parent = Main
@@ -230,13 +244,12 @@ local function RunScript()
     ServerListLayout.Parent = ServerScroll
     ServerListLayout.Padding = UDim.new(0, 4)
 
+    -- Перемещение окна
     local Dragging, DragInput, DragStart, StartPos
     TopBar.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 then
             Dragging, DragStart, StartPos = true, input.Position, Main.Position
-            input.Changed:Connect(function()
-                if input.UserInputState == Enum.UserInputState.End then Dragging = false end
-            end)
+            input.Changed:Connect(function() if input.UserInputState == Enum.UserInputState.End then Dragging = false end end)
         end
     end)
     TopBar.InputChanged:Connect(function(input)
@@ -249,25 +262,14 @@ local function RunScript()
         end
     end)
 
-    -- === ОБНОВЛЕНИЕ ESP ЛИНИЙ И СТАТИСТИКИ ===
-    local Frames, LastUpdate = 0, tick()
+    -- Линии к петам
     RunService.RenderStepped:Connect(function()
-        -- FPS Counter
-        Frames += 1
-        if tick() - LastUpdate >= 1 then
-            if Main.Visible then FPSLabel.Text = "FPS: " .. Frames end
-            Frames, LastUpdate = 0, tick()
-        end
-
-        -- Обновление линий к петам
         if Drawing then
             for pet, line in pairs(Tracers) do
                 if pet and pet.Parent and (pet:FindFirstChildWhichIsA("BasePart", true) or pet.PrimaryPart) then
                     local part = pet:FindFirstChildWhichIsA("BasePart", true) or pet.PrimaryPart
                     local vector, onScreen = Camera:WorldToViewportPoint(part.Position)
-                    
                     if onScreen then
-                        -- Рисуем линию от нижнего центра экрана к пету
                         line.From = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
                         line.To = Vector2.new(vector.X, vector.Y)
                         line.Visible = true
@@ -283,33 +285,15 @@ local function RunScript()
         end
     end)
 
-    task.spawn(function()
-        while true do
-            pcall(function()
-                if Main.Visible and Content.Visible then
-                    local Ping = math.floor(Stats.Network.ServerStatsItem["Data Ping"]:GetValue())
-                    PingLabel.Text = "Ping: " .. Ping .. " ms"
-                    PlayersLabel.Text = "Players: " .. #Players:GetPlayers()
-                    local Runtime = math.floor(tick() - StartTime)
-                    RuntimeLabel.Text = string.format("Runtime: %02d:%02d", math.floor(Runtime/60), Runtime%60)
-                    HopsLabel.Text = "Hops: " .. HopCount
-                    RamLabel.Text = "RAM: " .. math.floor(Stats:GetTotalMemoryUsageMb()) .. " MB"
-                    ServerTimeLabel.Text = "Server: " .. math.floor(workspace.DistributedGameTime) .. " s"
-                end
-            end)
-            task.wait(1)
-        end
-    end)
-
     -- === РАДАР ПЕТОВ ===
     local function PopulatePetList()
         for _, child in ipairs(PetScrollFrame:GetChildren()) do
-            if child:IsA("Frame") then child:Destroy() end
+            if child:IsA("Frame") or child:IsA("TextLabel") then child:Destroy() end
         end
 
         local MapFolder = workspace:FindFirstChild("Map")
         local WildPetSpawns = MapFolder and MapFolder:FindFirstChild("WildPetSpawns")
-        local FoundAny = false
+        local HasPets = false
 
         if WildPetSpawns then
             for _, petModel in ipairs(WildPetSpawns:GetChildren()) do
@@ -317,7 +301,6 @@ local function RunScript()
                 local matchedName = nil
                 
                 for wantedName in pairs(WantedPets) do
-                    -- ИСПРАВЛЕНИЕ: Ищем строго формат "wildpet_ИМЯ_", чтобы игнорировать случайные слова в UUID (например bee2)
                     if petNameLower:find("wildpet_" .. wantedName:lower() .. "_") then
                         matchedName = wantedName
                         break
@@ -325,19 +308,16 @@ local function RunScript()
                 end
 
                 if matchedName then
-                    FoundAny = true
-                    
-                    -- Создаем линию ESP, если её еще нет
+                    HasPets = true
                     if not Tracers[petModel] and Drawing then
                         local line = Drawing.new("Line")
                         line.Visible = false
-                        line.Color = Color3.fromRGB(100, 255, 100) -- Зеленая линия
+                        line.Color = Color3.fromRGB(100, 255, 100)
                         line.Thickness = 1.5
                         line.Transparency = 1
                         Tracers[petModel] = line
                     end
 
-                    -- UI Элемент
                     local ItemFrame = Instance.new("Frame")
                     ItemFrame.Parent = PetScrollFrame
                     ItemFrame.Size = UDim2.new(1, -4, 0, 26)
@@ -369,7 +349,6 @@ local function RunScript()
                         local Character = LocalPlayer.Character
                         local Root = Character and Character:FindFirstChild("HumanoidRootPart")
                         local PetPart = petModel:FindFirstChildWhichIsA("BasePart", true) or petModel.PrimaryPart
-
                         if Root and PetPart then
                             Root.CFrame = PetPart.CFrame + Vector3.new(0, 3, 0)
                             TPBtn.Text = "✨"
@@ -381,7 +360,9 @@ local function RunScript()
             end
         end
 
-        if not FoundAny then
+        FoundRarePet = HasPets -- Обновляем глобальный флаг
+
+        if not HasPets then
             local EmptyLabel = Instance.new("TextLabel")
             EmptyLabel.Parent = PetScrollFrame
             EmptyLabel.Size = UDim2.new(1, 0, 0, 20)
@@ -401,12 +382,8 @@ local function RunScript()
         local WildPetSpawns = MapFolder and MapFolder:WaitForChild("WildPetSpawns", 10)
         if WildPetSpawns then
             WildPetSpawns.ChildAdded:Connect(function() task.wait(0.3) PopulatePetList() end)
-            -- Удаляем линию при исчезновении пета
             WildPetSpawns.ChildRemoved:Connect(function(child) 
-                if Tracers[child] then
-                    Tracers[child]:Remove()
-                    Tracers[child] = nil
-                end
+                if Tracers[child] then Tracers[child]:Remove(); Tracers[child] = nil end
                 task.wait(0.3) 
                 PopulatePetList() 
             end)
@@ -414,7 +391,7 @@ local function RunScript()
     end)
     PopulatePetList()
 
-    -- === СИСТЕМА КЭШИРОВАНИЯ СЕРВЕРОВ ===
+    -- === СИСТЕМА КЭШИРОВАНИЯ СЕРВЕРОВ И ХОПОВ ===
     local function FetchAllServers()
         local Servers = {}
         if Request then
@@ -456,50 +433,7 @@ local function RunScript()
         if writefile then pcall(function() writefile(CacheFileName, HttpService:JSONEncode(serversList)) end) end
     end
 
-    local function PopulateServerList()
-        for _, child in ipairs(ServerScroll:GetChildren()) do
-            if child:IsA("TextButton") then child:Destroy() end
-        end
-
-        ListTitle.Text = "Loading..."
-        local Servers = GetCachedServers()
-        ListTitle.Text = "Servers ("..#Servers..")"
-
-        table.sort(Servers, function(a,b) return (a.playing or 0) < (b.playing or 0) end)
-
-        for i, Server in ipairs(Servers) do
-            if Server.id ~= JobId and Server.playing < Server.maxPlayers then
-                local SBtn = Instance.new("TextButton")
-                SBtn.Parent = ServerScroll
-                SBtn.Size = UDim2.new(1, -8, 0, 26)
-                SBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 50)
-                SBtn.BorderSizePixel = 0
-                SBtn.TextColor3 = Color3.new(1,1,1)
-                SBtn.Font = Enum.Font.Gotham
-                SBtn.TextSize = 11
-                SBtn.Text = "👥 " .. Server.playing .. "/" .. Server.maxPlayers .. " | Join >"
-                Instance.new("UICorner", SBtn).CornerRadius = UDim.new(0, 6)
-
-                SBtn.MouseButton1Click:Connect(function()
-                    SBtn.Text = "Teleporting..."
-                    HopCount += 1
-                    AddRecentServer(Server.id)
-                    table.remove(Servers, i)
-                    UpdateCacheFile(Servers)
-                    QueueNextTeleport()
-                    TeleportService:TeleportToPlaceInstance(PlaceId, Server.id, LocalPlayer)
-                end)
-            end
-        end
-        ServerScroll.CanvasSize = UDim2.new(0, 0, 0, ServerListLayout.AbsoluteContentSize.Y + 10)
-    end
-
-    ListButton.MouseButton1Click:Connect(function()
-        ListFrame.Visible = not ListFrame.Visible
-        if ListFrame.Visible then task.spawn(PopulateServerList) end
-    end)
-
-    local function RandomServerHop()
+    RandomServerHop = function()
         ServerHopButton.Text = "⚡ Reading Cache..."
         pcall(function()
             local Servers = GetCachedServers()
@@ -514,7 +448,6 @@ local function RunScript()
                 local SelectedServer = Servers[RandomIdx]
                 table.remove(Servers, RandomIdx)
                 UpdateCacheFile(Servers)
-                HopCount += 1
                 AddRecentServer(SelectedServer.id)
                 QueueNextTeleport()
                 TeleportService:TeleportToPlaceInstance(PlaceId, SelectedServer.id, LocalPlayer)
@@ -541,7 +474,6 @@ local function RunScript()
                 local SelectedServer = Servers[BestIndex]
                 table.remove(Servers, BestIndex)
                 UpdateCacheFile(Servers)
-                HopCount += 1
                 AddRecentServer(SelectedServer.id)
                 QueueNextTeleport()
                 TeleportService:TeleportToPlaceInstance(PlaceId, SelectedServer.id, LocalPlayer)
@@ -554,16 +486,20 @@ local function RunScript()
         end)
     end
 
-    local function Rejoin()
-        pcall(function()
-            QueueNextTeleport()
-            TeleportService:TeleportToPlaceInstance(PlaceId, JobId, LocalPlayer)
-        end)
-    end
-
     ServerHopButton.MouseButton1Click:Connect(RandomServerHop)
     LowPlayerButton.MouseButton1Click:Connect(LowPlayerHop)
-    RejoinButton.MouseButton1Click:Connect(Rejoin)
+    RejoinButton.MouseButton1Click:Connect(function() QueueNextTeleport(); TeleportService:TeleportToPlaceInstance(PlaceId, JobId, LocalPlayer) end)
+    
+    -- === ЛОГИКА АВТОХОПА (ЖДЕТ 5 СЕК) ===
+    task.spawn(function()
+        if not game:IsLoaded() then game.Loaded:Wait() end
+        task.wait(5) -- Ждем 5 секунд после прогрузки
+        
+        if Settings.AutoHop and not FoundRarePet then
+            AutoHopBtn.Text = "⏳ Hopping..."
+            RandomServerHop()
+        end
+    end)
 
     -- СВОРАЧИВАНИЕ GUI
     local Minimized = false
@@ -571,11 +507,11 @@ local function RunScript()
         Minimized = not Minimized
         Content.Visible = not Minimized
         if Minimized then ListFrame.Visible = false end
-        local TargetSize = Minimized and UDim2.new(0, 200, 0, 30) or UDim2.new(0, 200, 0, 480)
+        local TargetSize = Minimized and UDim2.new(0, 200, 0, 30) or UDim2.new(0, 200, 0, 360)
         TweenService:Create(Main, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Size = TargetSize }):Play()
     end)
     
-    print("Server Tools & Anti-Lag Loaded Successfully!")
+    print("Clean Pet Finder & Auto-Hop Loaded Successfully!")
 end
 
 RunScript()
