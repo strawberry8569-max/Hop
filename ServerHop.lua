@@ -23,7 +23,7 @@ local function RunScript()
     local RecentServers = {}
     local CacheFileName = "HopCache_" .. PlaceId .. ".json"
     
-    -- === ТАБЛИЦА НУЖНЫХ ПЕТОВ ===
+    -- === СПИСОК РЕДКИХ ПЕТОВ ===
     local WantedPets = {
         Unicorn = true,
         Raccoon = true,
@@ -31,8 +31,6 @@ local function RunScript()
         Bee = true,
         Bear = true
     }
-    
-    local AutoTPEnabled = false -- Статус авто-телепорта (по желанию)
 
     local function AddRecentServer(id)
         table.insert(RecentServers, 1, id)
@@ -66,26 +64,27 @@ local function RunScript()
         end)
     end)
 
-    -- === СОЗДАНИЕ GUI ===
+    -- === СОЗДАНИЕ УВЕЛИЧЕННОГО GUI ===
     local Gui = Instance.new("ScreenGui")
     Gui.Name = "HopGui"
     Gui.ResetOnSpawn = false
     Gui.Parent = game.CoreGui
 
+    -- Главное окно увеличено (200 x 480)
     local Main = Instance.new("Frame")
     Main.Parent = Gui
-    Main.Size = UDim2.new(0,180,0,360)
-    Main.Position = UDim2.new(1,-210,0,40)
+    Main.Size = UDim2.new(0, 200, 0, 480)
+    Main.Position = UDim2.new(1, -220, 0, 40)
     Main.BackgroundColor3 = Color3.fromRGB(28,28,28)
     Main.BorderSizePixel = 0
 
     local MainCorner = Instance.new("UICorner")
-    MainCorner.CornerRadius = UDim.new(0,12)
+    MainCorner.CornerRadius = UDim.new(0, 12)
     MainCorner.Parent = Main
 
     local Title = Instance.new("TextLabel")
     Title.Parent = Main
-    Title.Size = UDim2.new(1,0,0,25)
+    Title.Size = UDim2.new(1, 0, 0, 25)
     Title.BackgroundTransparency = 1
     Title.Text = "Server Tools"
     Title.TextColor3 = Color3.new(1,1,1)
@@ -94,8 +93,8 @@ local function RunScript()
 
     local Minimize = Instance.new("TextButton")
     Minimize.Parent = Main
-    Minimize.Size = UDim2.new(0,20,0,20)
-    Minimize.Position = UDim2.new(1,-25,0,3)
+    Minimize.Size = UDim2.new(0, 20, 0, 20)
+    Minimize.Position = UDim2.new(1, -25, 0, 3)
     Minimize.Text = "-"
     Minimize.Font = Enum.Font.GothamBold
     Minimize.TextSize = 15
@@ -105,45 +104,29 @@ local function RunScript()
     local MinCorner = Instance.new("UICorner")
     MinCorner.Parent = Minimize
 
+    -- Текстовые метки статистики
     local FPSLabel = Instance.new("TextLabel")
     FPSLabel.Parent = Main
-    FPSLabel.Position = UDim2.new(0,10,0,30)
-    FPSLabel.Size = UDim2.new(1,-20,0,18)
+    FPSLabel.Position = UDim2.new(0, 10, 0, 30)
+    FPSLabel.Size = UDim2.new(1, -20, 0, 18)
     FPSLabel.BackgroundTransparency = 1
     FPSLabel.TextColor3 = Color3.new(1,1,1)
     FPSLabel.Font = Enum.Font.Gotham
     FPSLabel.TextSize = 13
     FPSLabel.TextXAlignment = Enum.TextXAlignment.Left
 
-    local PingLabel = FPSLabel:Clone()
-    PingLabel.Parent = Main
-    PingLabel.Position = UDim2.new(0,10,0,50)
+    local PingLabel = FPSLabel:Clone() PingLabel.Parent = Main PingLabel.Position = UDim2.new(0, 10, 0, 50)
+    local PlayersLabel = FPSLabel:Clone() PlayersLabel.Parent = Main PlayersLabel.Position = UDim2.new(0, 10, 0, 70)
+    local RuntimeLabel = FPSLabel:Clone() RuntimeLabel.Parent = Main RuntimeLabel.Position = UDim2.new(0, 10, 0, 90)
+    local HopsLabel = FPSLabel:Clone() HopsLabel.Parent = Main HopsLabel.Position = UDim2.new(0, 10, 0, 110)
+    local RamLabel = FPSLabel:Clone() RamLabel.Parent = Main RamLabel.Position = UDim2.new(0, 10, 0, 130)
+    local ServerTimeLabel = FPSLabel:Clone() ServerTimeLabel.Parent = Main ServerTimeLabel.Position = UDim2.new(0, 10, 0, 150)
 
-    local PlayersLabel = FPSLabel:Clone()
-    PlayersLabel.Parent = Main
-    PlayersLabel.Position = UDim2.new(0,10,0,70)
-
-    local RuntimeLabel = FPSLabel:Clone()
-    RuntimeLabel.Parent = Main
-    RuntimeLabel.Position = UDim2.new(0,10,0,90)
-
-    local HopsLabel = FPSLabel:Clone()
-    HopsLabel.Parent = Main
-    HopsLabel.Position = UDim2.new(0,10,0,110)
-
-    local RamLabel = FPSLabel:Clone()
-    RamLabel.Parent = Main
-    RamLabel.Position = UDim2.new(0,10,0,130)
-
-    local ServerTimeLabel = FPSLabel:Clone()
-    ServerTimeLabel.Parent = Main
-    ServerTimeLabel.Position = UDim2.new(0,10,0,150)
-
-    local function CreateButton(text,y)
+    local function CreateButton(text, y)
         local Button = Instance.new("TextButton")
         Button.Parent = Main
-        Button.Size = UDim2.new(1,-20,0,28)
-        Button.Position = UDim2.new(0,10,0,y)
+        Button.Size = UDim2.new(1, -20, 0, 28)
+        Button.Position = UDim2.new(0, 10, 0, y)
         Button.BackgroundColor3 = Color3.fromRGB(45,45,45)
         Button.BorderSizePixel = 0
         Button.TextColor3 = Color3.new(1,1,1)
@@ -152,9 +135,13 @@ local function RunScript()
         Button.Text = text
 
         local Corner = Instance.new("UICorner")
-        Corner.CornerRadius = UDim.new(0,10)
+        Corner.CornerRadius = UDim.new(0, 10)
         Corner.Parent = Button
 
+        local EnterTween = TweenService:Create(Button, TweenInfo.new(0.15), { BackgroundColor3 = Color3.fromRGB(70,70,70) })
+        local LeaveTween = TweenService:Create(Button, TweenInfo.new(0.15), { BackgroundColor3 = Color3.fromRGB(45,45,45) })
+        Button.MouseEnter:Connect(function() EnterTween:Play() end)
+        Button.MouseLeave:Connect(function() LeaveTween:Play() end)
         return Button
     end
 
@@ -162,21 +149,33 @@ local function RunScript()
     local LowPlayerButton = CreateButton("👥 Low Player Hop", 214)
     local RejoinButton = CreateButton("↻ Rejoin", 248)
     local ListButton = CreateButton("📜 Server List", 282)
-    local PetButton = CreateButton("🐾 Pet List", 316) -- Кнопка петов
 
-    -- Анимации для кнопок (подключаем после создания всех кнопок)
-    for _, btn in ipairs({ServerHopButton, LowPlayerButton, RejoinButton, ListButton, PetButton}) do
-        local EnterTween = TweenService:Create(btn, TweenInfo.new(0.15), { BackgroundColor3 = Color3.fromRGB(70,70,70) })
-        local LeaveTween = TweenService:Create(btn, TweenInfo.new(0.15), { BackgroundColor3 = (btn == PetButton and btn.BackgroundColor3 or Color3.fromRGB(45,45,45)) })
-        btn.MouseEnter:Connect(function() EnterTween:Play() end)
-        btn.MouseLeave:Connect(function() 
-            -- Перезапускаем цвет исхода, так как у PetButton он может динамически меняться
-            LeaveTween = TweenService:Create(btn, TweenInfo.new(0.15), { BackgroundColor3 = btn.BackgroundColor3 })
-            LeaveTween:Play() 
-        end)
-    end
+    -- === ВСТРОЕННЫЙ БЛОК ПЕТОВ ===
+    local PetsHeader = Instance.new("TextLabel")
+    PetsHeader.Parent = Main
+    PetsHeader.Position = UDim2.new(0, 10, 0, 315)
+    PetsHeader.Size = UDim2.new(1, -20, 0, 20)
+    PetsHeader.BackgroundTransparency = 1
+    PetsHeader.Text = "Pets on Server:"
+    PetsHeader.TextColor3 = Color3.fromRGB(150, 200, 150)
+    PetsHeader.Font = Enum.Font.GothamBold
+    PetsHeader.TextSize = 13
+    PetsHeader.TextXAlignment = Enum.TextXAlignment.Left
 
-    -- === ПАНЕЛЬ СО СПИСКОМ СЕРВЕРОВ (Слева) ===
+    local PetScrollFrame = Instance.new("ScrollingFrame")
+    PetScrollFrame.Parent = Main
+    PetScrollFrame.Position = UDim2.new(0, 10, 0, 340)
+    PetScrollFrame.Size = UDim2.new(1, -20, 0, 130) -- Фиксированная зона прокрутки петов
+    PetScrollFrame.BackgroundTransparency = 1
+    PetScrollFrame.ScrollBarThickness = 4
+    PetScrollFrame.BorderSizePixel = 0
+
+    local PetListLayout = Instance.new("UIListLayout")
+    PetListLayout.Parent = PetScrollFrame
+    PetListLayout.Padding = UDim.new(0, 4)
+    PetListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+
+    -- === БОКОВАЯ ПАНЕЛЬ СЕРВЕРОВ (Слева) ===
     local ListFrame = Instance.new("Frame")
     ListFrame.Parent = Main
     ListFrame.Size = UDim2.new(0, 180, 1, 0)
@@ -206,51 +205,7 @@ local function RunScript()
     ListLayout.Padding = UDim.new(0, 5)
     ListLayout.SortOrder = Enum.SortOrder.LayoutOrder
 
-    -- === ПАНЕЛЬ СО СПИСКОМ ПЕТОВ (Справа) ===
-    local PetFrame = Instance.new("Frame")
-    PetFrame.Parent = Main
-    PetFrame.Size = UDim2.new(0, 180, 1, 0)
-    PetFrame.Position = UDim2.new(0, 190, 0, 0)
-    PetFrame.BackgroundColor3 = Color3.fromRGB(28,28,28)
-    PetFrame.Visible = false
-    PetFrame.ClipsDescendants = true
-
-    local PetCorner = Instance.new("UICorner")
-    PetCorner.CornerRadius = UDim.new(0,12)
-    PetCorner.Parent = PetFrame
-
-    local PetListTitle = Title:Clone()
-    PetListTitle.Parent = PetFrame
-    PetListTitle.Text = "Wild Pets"
-
-    local AutoTPBtn = Instance.new("TextButton")
-    AutoTPBtn.Parent = PetFrame
-    AutoTPBtn.Size = UDim2.new(1, -10, 0, 24)
-    AutoTPBtn.Position = UDim2.new(0, 5, 0, 30)
-    AutoTPBtn.BackgroundColor3 = Color3.fromRGB(65, 35, 35)
-    AutoTPBtn.TextColor3 = Color3.new(1,1,1)
-    AutoTPBtn.Font = Enum.Font.GothamBold
-    AutoTPBtn.TextSize = 11
-    AutoTPBtn.Text = "Auto TP: OFF"
-    
-    local ATCorner = Instance.new("UICorner")
-    ATCorner.CornerRadius = UDim.new(0, 6)
-    ATCorner.Parent = AutoTPBtn
-
-    local PetScrollFrame = Instance.new("ScrollingFrame")
-    PetScrollFrame.Parent = PetFrame
-    PetScrollFrame.Size = UDim2.new(1, -10, 1, -65)
-    PetScrollFrame.Position = UDim2.new(0, 5, 0, 60)
-    PetScrollFrame.BackgroundTransparency = 1
-    PetScrollFrame.ScrollBarThickness = 4
-    PetScrollFrame.BorderSizePixel = 0
-
-    local PetListLayout = Instance.new("UIListLayout")
-    PetListLayout.Parent = PetScrollFrame
-    PetListLayout.Padding = UDim.new(0, 5)
-    PetListLayout.SortOrder = Enum.SortOrder.LayoutOrder
-
-    -- Драг окна
+    -- Драг (перетаскивание) окна
     local Dragging, DragInput, DragStart, StartPos
     Main.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 then
@@ -270,7 +225,7 @@ local function RunScript()
         end
     end)
 
-    -- FPS Counter
+    -- Счетчик FPS / Обновление стат
     local Frames, LastUpdate = 0, tick()
     RunService.RenderStepped:Connect(function()
         if not Main.Visible then return end
@@ -374,10 +329,16 @@ local function RunScript()
         ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, ListLayout.AbsoluteContentSize.Y + 10)
     end
 
-    -- === СКАНИРОВАНИЕ И ОТРИСОВКА ПЕТОВ ===
-    local function GetCurrentWildPets()
+    -- === АВТО-СКАН СЕРВЕРА И ОТРИСОВКА ПЕТОВ В МЕНЮ ===
+    local function PopulatePetList()
+        -- Очищаем старые элементы списка петов
+        for _, child in ipairs(PetScrollFrame:GetChildren()) do
+            if child:IsA("Frame") then child:Destroy() end
+        end
+
         local ValidPets = {}
         local WildPetSpawns = workspace:FindFirstChild("WildPetSpawns")
+        
         if WildPetSpawns then
             for _, petModel in ipairs(WildPetSpawns:GetChildren()) do
                 local petNameLower = petModel.Name:lower()
@@ -389,103 +350,85 @@ local function RunScript()
                 end
             end
         end
-        return ValidPets
-    end
 
-    local function PopulatePetList()
-        -- Сначала чистим старый UI внутри панели
-        for _, child in ipairs(PetScrollFrame:GetChildren()) do
-            if child:IsA("TextButton") then child:Destroy() end
-        end
-
-        local CurrentPets = GetCurrentWildPets()
-        PetListTitle.Text = "Wild Pets (" .. #CurrentPets .. ")"
-
-        -- ОБНОВЛЕНИЕ ГЛАВНОЙ КНОПКИ (Показывает инфу СРАЗУ при заходе)
-        if #CurrentPets > 0 then
-            PetButton.Text = "🐾 Pets Found: " .. #CurrentPets
-            PetButton.BackgroundColor3 = Color3.fromRGB(35, 85, 35) -- Ярко-зеленый, если петы есть!
+        -- Обновляем заголовок секции
+        if #ValidPets > 0 then
+            PetsHeader.Text = "Pets on Server: (" .. #ValidPets .. ")"
+            PetsHeader.TextColor3 = Color3.fromRGB(85, 255, 85) -- Зеленый, если кто-то есть!
         else
-            PetButton.Text = "🐾 Pets: 0"
-            PetButton.BackgroundColor3 = Color3.fromRGB(45,45,45) -- Обычный серый
+            PetsHeader.Text = "Pets on Server: (None)"
+            PetsHeader.TextColor3 = Color3.fromRGB(150, 150, 150) -- Серый, если пусто
+            
+            -- Выводим заглушку "Пусто"
+            local EmptyLabel = Instance.new("TextLabel")
+            EmptyLabel.Parent = PetScrollFrame
+            EmptyLabel.Size = UDim2.new(1, 0, 0, 20)
+            EmptyLabel.BackgroundTransparency = 1
+            EmptyLabel.Text = "No rare pets found."
+            EmptyLabel.TextColor3 = Color3.fromRGB(100,100,100)
+            EmptyLabel.Font = Enum.Font.Gotham
+            EmptyLabel.TextSize = 12
+            EmptyLabel.TextXAlignment = Enum.TextXAlignment.Left
         end
 
-        -- Отрисовка кнопок ТП для каждого пета
-        for _, petData in ipairs(CurrentPets) do
-            local PBtn = Instance.new("TextButton")
-            PBtn.Parent = PetScrollFrame
-            PBtn.Size = UDim2.new(1, -8, 0, 30)
-            PBtn.BackgroundColor3 = Color3.fromRGB(55,55,55)
-            PBtn.BorderSizePixel = 0
-            PBtn.TextColor3 = Color3.new(1,1,1)
-            PBtn.Font = Enum.Font.GothamBold
-            PBtn.TextSize = 12
-            PBtn.Text = "🐾 " .. petData.RealName .. " [TP]"
+        -- Генерируем строчки: Название + Кнопка ТП справа
+        for _, petData in ipairs(ValidPets) do
+            local ItemFrame = Instance.new("Frame")
+            ItemFrame.Parent = PetScrollFrame
+            ItemFrame.Size = UDim2.new(1, -6, 0, 26)
+            ItemFrame.BackgroundTransparency = 1
 
-            local PCorner = Instance.new("UICorner")
-            PCorner.CornerRadius = UDim.new(0, 6)
-            PCorner.Parent = PBtn
+            -- Название пета слева
+            local NameLabel = Instance.new("TextLabel")
+            NameLabel.Parent = ItemFrame
+            NameLabel.Size = UDim2.new(0, 120, 1, 0)
+            NameLabel.BackgroundTransparency = 1
+            NameLabel.Text = "🐾 " .. petData.RealName
+            NameLabel.TextColor3 = Color3.new(1, 1, 1)
+            NameLabel.Font = Enum.Font.GothamBold
+            NameLabel.TextSize = 12
+            NameLabel.TextXAlignment = Enum.TextXAlignment.Left
 
-            -- Кнопка ТП к объекту возле пета
-            PBtn.MouseButton1Click:Connect(function()
+            -- Кнопка ТП справа
+            local TPBtn = Instance.new("TextButton")
+            TPBtn.Parent = ItemFrame
+            TPBtn.Size = UDim2.new(0, 45, 1, -4)
+            TPBtn.Position = UDim2.new(1, -45, 0, 2)
+            TPBtn.BackgroundColor3 = Color3.fromRGB(55, 75, 55)
+            TPBtn.BorderSizePixel = 0
+            TPBtn.TextColor3 = Color3.new(1, 1, 1)
+            TPBtn.Font = Enum.Font.GothamBold
+            TPBtn.TextSize = 11
+            TPBtn.Text = "TP"
+
+            local TPCorner = Instance.new("UICorner")
+            TPCorner.CornerRadius = UDim.new(0, 5)
+            TPCorner.Parent = TPBtn
+
+            -- Логика нажатия на ТП
+            TPBtn.MouseButton1Click:Connect(function()
                 local Character = LocalPlayer.Character
                 local Root = Character and Character:FindFirstChild("HumanoidRootPart")
                 local PetPart = petData.Model and petData.Model:FindFirstChildWhichIsA("BasePart", true)
 
                 if Root and PetPart then
-                    Root.CFrame = PetPart.CFrame + Vector3.new(0,3,0)
-                    PBtn.Text = "✨ Teleported!"
-                    task.wait(0.6)
-                    PBtn.Text = "🐾 " .. petData.RealName .. " [TP]"
+                    Root.CFrame = PetPart.CFrame + Vector3.new(0, 3, 0)
+                    TPBtn.Text = "✨"
+                    task.wait(0.5)
+                    TPBtn.Text = "TP"
                 else
-                    PBtn.Text = "❌ Object Missing"
+                    TPBtn.Text = "❌"
                 end
             end)
         end
-        PetScrollFrame.CanvasSize = UDim2.new(0, 0, 0, PetListLayout.AbsoluteContentSize.Y + 10)
+        PetScrollFrame.CanvasSize = UDim2.new(0, 0, 0, PetListLayout.AbsoluteContentSize.Y + 5)
     end
 
-    -- Переключатель функции Auto TP
-    AutoTPBtn.MouseButton1Click:Connect(function()
-        AutoTPEnabled = not AutoTPEnabled
-        if AutoTPEnabled then
-            AutoTPBtn.BackgroundColor3 = Color3.fromRGB(35, 65, 35)
-            AutoTPBtn.Text = "Auto TP: ON"
-            local CurrentPets = GetCurrentWildPets()
-            if #CurrentPets > 0 then
-                local Character = LocalPlayer.Character
-                local Root = Character and Character:FindFirstChild("HumanoidRootPart")
-                local PetPart = CurrentPets[1].Model and CurrentPets[1].Model:FindFirstChildWhichIsA("BasePart", true)
-                if Root and PetPart then Root.CFrame = PetPart.CFrame + Vector3.new(0,3,0) end
-            end
-        else
-            AutoTPBtn.BackgroundColor3 = Color3.fromRGB(65, 35, 35)
-            AutoTPBtn.Text = "Auto TP: OFF"
-        end
-    end)
-
-    -- === ЛИСТЕНЕРЫ И СКАНИРОВАНИЕ ПРИ СПАВНЕ ===
+    -- === ДИНАМИЧЕСКИЕ ОБНОВЛЕНИЯ ПРИ СПАВНЕ/УДАЛЕНИИ ===
     local WildPetSpawns = workspace:WaitForChild("WildPetSpawns")
     
-    WildPetSpawns.ChildAdded:Connect(function(model)
+    WildPetSpawns.ChildAdded:Connect(function()
         task.wait(0.3)
-        
-        if AutoTPEnabled then
-            local nameLower = model.Name:lower()
-            for wantedName in pairs(WantedPets) do
-                if nameLower:find(wantedName:lower()) then
-                    local Character = LocalPlayer.Character
-                    local Root = Character and Character:FindFirstChild("HumanoidRootPart")
-                    local PetPart = model:FindFirstChildWhichIsA("BasePart", true)
-                    if Root and PetPart then
-                        Root.CFrame = PetPart.CFrame + Vector3.new(0,3,0)
-                        break
-                    end
-                end
-            end
-        end
-
-        -- Всегда обновляем GUI (даже если панель закрыта, кнопка на главной панели изменит статус)
         PopulatePetList()
     end)
 
@@ -494,18 +437,13 @@ local function RunScript()
         PopulatePetList()
     end)
 
-    -- Кнопки UI (Открыть/Закрыть списки)
+    -- Кнопка списка серверов
     ListButton.MouseButton1Click:Connect(function()
         ListFrame.Visible = not ListFrame.Visible
         if ListFrame.Visible then task.spawn(PopulateServerList) end
     end)
 
-    PetButton.MouseButton1Click:Connect(function()
-        PetFrame.Visible = not PetFrame.Visible
-        if PetFrame.Visible then task.spawn(PopulatePetList) end
-    end)
-
-    -- === СТАНДАРТНЫЙ ХОП ===
+    -- === ОБЫЧНЫЕ КНОПКИ ХОПА ===
     local function RandomServerHop()
         ServerHopButton.Text = "⚡ Reading Cache..."
         pcall(function()
@@ -574,27 +512,24 @@ local function RunScript()
     LowPlayerButton.MouseButton1Click:Connect(LowPlayerHop)
     RejoinButton.MouseButton1Click:Connect(Rejoin)
 
-    -- Свернуть меню
+    -- Сворачивание меню
     local Minimized = false
     Minimize.MouseButton1Click:Connect(function()
         Minimized = not Minimized
-        local Elements = { ServerHopButton, LowPlayerButton, RejoinButton, ListButton, PetButton, FPSLabel, PingLabel, PlayersLabel, RuntimeLabel, HopsLabel, RamLabel, ServerTimeLabel }
+        local Elements = { ServerHopButton, LowPlayerButton, RejoinButton, ListButton, PetsHeader, PetScrollFrame, FPSLabel, PingLabel, PlayersLabel, RuntimeLabel, HopsLabel, RamLabel, ServerTimeLabel }
         for _, element in ipairs(Elements) do element.Visible = not Minimized end
-        if Minimized then 
-            ListFrame.Visible = false 
-            PetFrame.Visible = false
-        end
-        local TargetSize = Minimized and UDim2.new(0,180,0,30) or UDim2.new(0,180,0,360)
+        if Minimized then ListFrame.Visible = false end
+        local TargetSize = Minimized and UDim2.new(0, 200, 0, 30) or UDim2.new(0, 200, 0, 480)
         TweenService:Create(Main, TweenInfo.new(0.2), { Size = TargetSize }):Play()
     end)
     
-    -- Бинды клавиш
+    -- Горячие клавиши (Бинды)
     UserInputService.InputBegan:Connect(function(input, gameProcessed)
         if gameProcessed then return end
         pcall(function()
             if input.KeyCode == Enum.KeyCode.H then 
                 Main.Visible = not Main.Visible
-                if not Main.Visible then ListFrame.Visible = false PetFrame.Visible = false end
+                if not Main.Visible then ListFrame.Visible = false end
             elseif input.KeyCode == Enum.KeyCode.J then RandomServerHop()
             elseif input.KeyCode == Enum.KeyCode.K then LowPlayerHop()
             elseif input.KeyCode == Enum.KeyCode.L then Rejoin()
@@ -602,7 +537,7 @@ local function RunScript()
         end)
     end)
 
-    -- === ЗАПУСК ПЕРВОГО АВТО-СКАНА СЕРВЕРА ПРИ ВХОДЕ ===
+    -- === МГНОВЕННЫЙ ЗАПУСК СКАНА ПРИ ЗАХОДЕ ===
     PopulatePetList()
 end
 
