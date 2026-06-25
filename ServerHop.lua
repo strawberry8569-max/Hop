@@ -32,8 +32,7 @@ local Settings = {
         Dragonfly = true,
         Bee = true,
         Bear = true,
-        Monkey = true,
-        Bunny = true
+        Monkey = true
     }
 }
 local FoundRarePet = false 
