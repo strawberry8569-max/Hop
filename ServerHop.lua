@@ -24,9 +24,20 @@ local CacheFileName = "HopCache_" .. PlaceId .. ".json"
 local SettingsFolder = "PetFinderSettings"
 local SettingsFile = SettingsFolder .. "/Config.json"
 
-local Settings = { AutoHop = false }
+local Settings = { 
+    AutoHop = false,
+    WantedPets = {
+        Unicorn = true,
+        Raccoon = true,
+        Dragonfly = true,
+        Bee = true,
+        Bear = true,
+        Monkey = true
+    }
+}
 local FoundRarePet = false 
 local RandomServerHop 
+local PopulatePetList
 
 -- === СОХРАНЕНИЕ И ЗАГРУЗКА НАСТРОЕК ===
 local function SaveSettings()
@@ -43,20 +54,18 @@ local function LoadSettings()
         local success, result = pcall(function() return HttpService:JSONDecode(readfile(SettingsFile)) end)
         if success and type(result) == "table" then
             if result.AutoHop ~= nil then Settings.AutoHop = result.AutoHop end
+            if result.WantedPets then
+                for k, v in pairs(result.WantedPets) do
+                    Settings.WantedPets[k] = v
+                end
+            end
         end
     end
 end
 LoadSettings()
 
 -- === СПИСОК РЕДКИХ ПЕТОВ ===
-local WantedPets = {
-    Unicorn = true,
-    Raccoon = true,
-    Dragonfly = true,
-    Bee = true,
-    Bear = true,
-    -- Owl = true
-}
+-- (Перенесен в Settings.WantedPets)
 
 local Tracers = {} 
 
@@ -123,7 +132,7 @@ Gui.Parent = CoreGui
 
 local Main = Instance.new("Frame")
 Main.Parent = Gui
-Main.Size = UDim2.new(0, 200, 0, 430)
+Main.Size = UDim2.new(0, 200, 0, 500)
 Main.Position = UDim2.new(1, -220, 0, 40)
 Main.BackgroundColor3 = Color3.fromRGB(30, 30, 35, 255)
 Main.BorderSizePixel = 0
@@ -194,6 +203,54 @@ local PlayersLabel = FPSLabel:Clone()
 PlayersLabel.Parent = StatsFrame
 PlayersLabel.Position = UDim2.new(0, 0, 0, 36)
 
+-- === ФИЛЬТРЫ ПЕТОВ ===
+local FilterHeader = Instance.new("TextLabel")
+FilterHeader.Parent = Content
+FilterHeader.Size = UDim2.new(1, -20, 0, 20)
+FilterHeader.BackgroundTransparency = 1
+FilterHeader.Text = "⚙ Pet Filters:"
+FilterHeader.TextColor3 = Color3.fromRGB(200, 200, 150)
+FilterHeader.Font = Enum.Font.GothamBold
+FilterHeader.TextSize = 13
+FilterHeader.TextXAlignment = Enum.TextXAlignment.Left
+FilterHeader.LayoutOrder = 2
+
+local FilterScroll = Instance.new("ScrollingFrame")
+FilterScroll.Parent = Content
+FilterScroll.Size = UDim2.new(1, -20, 0, 80)
+FilterScroll.BackgroundTransparency = 1
+FilterScroll.ScrollBarThickness = 3
+FilterScroll.BorderSizePixel = 0
+FilterScroll.LayoutOrder = 3
+
+local FilterLayout = Instance.new("UIListLayout")
+FilterLayout.Parent = FilterScroll
+FilterLayout.Padding = UDim.new(0, 3)
+
+for petName, _ in pairs(Settings.WantedPets) do
+    local ToggleBtn = Instance.new("TextButton")
+    ToggleBtn.Parent = FilterScroll
+    ToggleBtn.Size = UDim2.new(1, -5, 0, 20)
+    ToggleBtn.BackgroundColor3 = Settings.WantedPets[petName] and Color3.fromRGB(60, 140, 60) or Color3.fromRGB(140, 60, 60)
+    ToggleBtn.TextColor3 = Color3.new(1, 1, 1)
+    ToggleBtn.Font = Enum.Font.GothamBold
+    ToggleBtn.TextSize = 11
+    ToggleBtn.Text = petName .. (Settings.WantedPets[petName] and " [ON]" or " [OFF]")
+    Instance.new("UICorner", ToggleBtn).CornerRadius = UDim.new(0, 4)
+    
+    ToggleBtn.MouseButton1Click:Connect(function()
+        Settings.WantedPets[petName] = not Settings.WantedPets[petName]
+        ToggleBtn.BackgroundColor3 = Settings.WantedPets[petName] and Color3.fromRGB(60, 140, 60) or Color3.fromRGB(140, 60, 60)
+        ToggleBtn.Text = petName .. (Settings.WantedPets[petName] and " [ON]" or " [OFF]")
+        SaveSettings()
+        if PopulatePetList then PopulatePetList() end
+    end)
+end
+
+FilterLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    FilterScroll.CanvasSize = UDim2.new(0, 0, 0, FilterLayout.AbsoluteContentSize.Y + 5)
+end)
+
 -- === ЗАГОЛОВОК ПЕТОВ ===
 local PetsHeader = Instance.new("TextLabel")
 PetsHeader.Parent = Content
@@ -204,7 +261,7 @@ PetsHeader.TextColor3 = Color3.fromRGB(150, 220, 150)
 PetsHeader.Font = Enum.Font.GothamBold
 PetsHeader.TextSize = 13
 PetsHeader.TextXAlignment = Enum.TextXAlignment.Left
-PetsHeader.LayoutOrder = 2
+PetsHeader.LayoutOrder = 4
 
 -- === СПИСОК ПЕТОВ ===
 local PetScrollFrame = Instance.new("ScrollingFrame")
@@ -213,11 +270,15 @@ PetScrollFrame.Size = UDim2.new(1, -20, 0, 100)
 PetScrollFrame.BackgroundTransparency = 1
 PetScrollFrame.ScrollBarThickness = 3
 PetScrollFrame.BorderSizePixel = 0
-PetScrollFrame.LayoutOrder = 3
+PetScrollFrame.LayoutOrder = 5
 
 local PetListLayout = Instance.new("UIListLayout")
 PetListLayout.Parent = PetScrollFrame
 PetListLayout.Padding = UDim.new(0, 4)
+
+PetListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    PetScrollFrame.CanvasSize = UDim2.new(0, 0, 0, PetListLayout.AbsoluteContentSize.Y + 5)
+end)
 
 -- === КНОПКИ ===
 local function CreateButton(text, order)
@@ -241,11 +302,10 @@ local function CreateButton(text, order)
     return Button
 end
 
-local AutoHopBtn = CreateButton("🚀 Auto Hop: OFF", 4)
-local ServerHopButton = CreateButton("🔄 Server Hop", 5)
-local LowPlayerButton = CreateButton("👥 Low Player Hop", 6)
-local RejoinButton = CreateButton("↻ Rejoin", 7)
-local ListButton = CreateButton("📜 Server List", 8)
+local AutoHopBtn = CreateButton("🚀 Auto Hop: OFF", 6)
+local ServerHopButton = CreateButton("🔄 Server Hop", 7)
+local LowPlayerButton = CreateButton("👥 Low Player Hop", 8)
+local RejoinButton = CreateButton("↻ Rejoin", 9)
 
 local function UpdateAutoHopVisual()
     AutoHopBtn.Text = Settings.AutoHop and "🚀 Auto Hop: ON" or "🚀 Auto Hop: OFF"
@@ -260,45 +320,18 @@ AutoHopBtn.MouseButton1Click:Connect(function()
     SaveSettings()
 end)
 
--- === ЛИСТ КЕШИРОВАННЫХ СЕРВЕРОВ ===
-local ListFrame = Instance.new("Frame")
-ListFrame.Parent = Main
-ListFrame.Size = UDim2.new(0, 190, 1, 0)
-ListFrame.Position = UDim2.new(0, -200, 0, 0)
-ListFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
-ListFrame.Visible = false
-Instance.new("UICorner", ListFrame).CornerRadius = UDim.new(0, 10)
+-- Убран Server List Frame
 
-local ListTitle = Instance.new("TextLabel")
-ListTitle.Parent = ListFrame
-ListTitle.Size = UDim2.new(1, 0, 0, 30)
-ListTitle.BackgroundTransparency = 1
-ListTitle.Text = "Cached Servers"
-ListTitle.TextColor3 = Color3.new(1, 1, 1)
-ListTitle.Font = Enum.Font.GothamBold
-ListTitle.TextSize = 13
-
-local ServerScroll = Instance.new("ScrollingFrame")
-ServerScroll.Parent = ListFrame
-ServerScroll.Size = UDim2.new(1, -10, 1, -40)
-ServerScroll.Position = UDim2.new(0, 5, 0, 35)
-ServerScroll.BackgroundTransparency = 1
-ServerScroll.ScrollBarThickness = 3
-ServerScroll.BorderSizePixel = 0
-local ServerListLayout = Instance.new("UIListLayout")
-ServerListLayout.Parent = ServerScroll
-ServerListLayout.Padding = UDim.new(0, 4)
-
--- Перемещение окна
+-- Перемещение окна (С поддержкой телефона)
 local Dragging, DragInput, DragStart, StartPos
 TopBar.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
         Dragging, DragStart, StartPos = true, input.Position, Main.Position
         input.Changed:Connect(function() if input.UserInputState == Enum.UserInputState.End then Dragging = false end end)
     end
 end)
 TopBar.InputChanged:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseMovement then DragInput = input end
+    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then DragInput = input end
 end)
 UserInputService.InputChanged:Connect(function(input)
     if input == DragInput and Dragging then
@@ -354,10 +387,59 @@ task.spawn(function()
     end
 end)
 
+-- === СЕЙФ ТЕЛЕПОРТ И АВТО-ПОКУПКА ===
+local isTeleporting = false
+local function SafeTeleportAndBuy(petModel)
+    if isTeleporting then return end
+    local char = LocalPlayer.Character
+    if not char then return end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+    
+    local primary = petModel:FindFirstChildWhichIsA("BasePart", true) or petModel.PrimaryPart
+    if not primary then return end
+    local targetPos = primary.Position + Vector3.new(0, 2.5, 0)
+    local distance = (hrp.Position - targetPos).Magnitude
+    
+    isTeleporting = true
+    local speed = 45 -- studs/sec (надежно, не кикает)
+    local tweenTime = distance / speed
+    
+    local originalAnchor = hrp.Anchored
+    hrp.Anchored = true
+    
+    local noclip = RunService.Stepped:Connect(function()
+        for _, part in ipairs(char:GetDescendants()) do
+            if part:IsA("BasePart") and part.CanCollide then part.CanCollide = false end
+        end
+    end)
+    
+    local tInfo = TweenInfo.new(tweenTime, Enum.EasingStyle.Linear)
+    local tween = TweenService:Create(hrp, tInfo, {CFrame = CFrame.new(targetPos)})
+    tween:Play()
+    tween.Completed:Wait()
+    
+    hrp.Anchored = originalAnchor
+    noclip:Disconnect()
+    
+    local prompt = petModel:FindFirstChildWhichIsA("ProximityPrompt", true)
+    if prompt then
+        if fireproximityprompt then
+            fireproximityprompt(prompt)
+        else
+            prompt.ActionText = "Buying..."
+            prompt:InputHoldBegin()
+            task.wait(prompt.HoldDuration + 0.1)
+            prompt:InputHoldEnd()
+        end
+    end
+    isTeleporting = false
+end
+
 -- === РАДАР ПЕТОВ ===
 local PetLabels = {}
 
-local function PopulatePetList()
+PopulatePetList = function()
     local MapFolder = workspace:FindFirstChild("Map")
     local WildPetSpawns = MapFolder and MapFolder:FindFirstChild("WildPetSpawns")
     local HasPets = false
@@ -368,8 +450,8 @@ local function PopulatePetList()
             local petNameLower = petModel.Name:lower()
             local matchedName = nil
             
-            for wantedName in pairs(WantedPets) do
-                if petNameLower:find("wildpet_" .. wantedName:lower() .. "_") then
+            for wantedName, isWanted in pairs(Settings.WantedPets) do
+                if isWanted and petNameLower:find("wildpet_" .. wantedName:lower() .. "_") then
                     matchedName = wantedName
                     break
                 end
@@ -389,16 +471,37 @@ local function PopulatePetList()
                 end
 
                 if not PetLabels[petModel] then
+                    local ItemFrame = Instance.new("Frame")
+                    ItemFrame.Size = UDim2.new(1, 0, 0, 25)
+                    ItemFrame.BackgroundTransparency = 1
+                    
                     local NameLabel = Instance.new("TextLabel")
-                    NameLabel.Parent = PetScrollFrame
-                    NameLabel.Size = UDim2.new(1, 0, 0, 20)
+                    NameLabel.Parent = ItemFrame
+                    NameLabel.Size = UDim2.new(1, -60, 1, 0)
                     NameLabel.BackgroundTransparency = 1
                     NameLabel.Text = "• " .. matchedName
                     NameLabel.TextColor3 = Color3.new(1, 1, 1)
                     NameLabel.Font = Enum.Font.Gotham
                     NameLabel.TextSize = 13
                     NameLabel.TextXAlignment = Enum.TextXAlignment.Left
-                    PetLabels[petModel] = NameLabel
+
+                    local TpBtn = Instance.new("TextButton")
+                    TpBtn.Parent = ItemFrame
+                    TpBtn.Size = UDim2.new(0, 55, 0, 20)
+                    TpBtn.Position = UDim2.new(1, -55, 0, 2)
+                    TpBtn.BackgroundColor3 = Color3.fromRGB(50, 150, 50)
+                    TpBtn.TextColor3 = Color3.new(1, 1, 1)
+                    TpBtn.Font = Enum.Font.GothamBold
+                    TpBtn.TextSize = 11
+                    TpBtn.Text = "TP & Buy"
+                    Instance.new("UICorner", TpBtn).CornerRadius = UDim.new(0, 4)
+                    
+                    TpBtn.MouseButton1Click:Connect(function()
+                        task.spawn(SafeTeleportAndBuy, petModel)
+                    end)
+                    
+                    ItemFrame.Parent = PetScrollFrame
+                    PetLabels[petModel] = ItemFrame
                 end
             end
         end
@@ -431,8 +534,6 @@ local function PopulatePetList()
     elseif EmptyLabel then
         EmptyLabel:Destroy()
     end
-
-    PetScrollFrame.CanvasSize = UDim2.new(0, 0, 0, PetListLayout.AbsoluteContentSize.Y + 5)
 end
 
 task.spawn(function()
@@ -587,7 +688,7 @@ ServerHopButton.MouseButton1Click:Connect(RandomServerHop)
 LowPlayerButton.MouseButton1Click:Connect(LowPlayerHop)
 RejoinButton.MouseButton1Click:Connect(function() QueueNextTeleport(); TeleportService:TeleportToPlaceInstance(PlaceId, JobId, LocalPlayer) end)
 
-ListButton.MouseButton1Click:Connect(function() ListFrame.Visible = not ListFrame.Visible end)
+-- (Убрана кнопка Server List)
 
 -- === МОЩНЫЙ ОБРАБОТЧИК ОШИБОК ===
 task.spawn(function()
